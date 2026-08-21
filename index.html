@@ -1,0 +1,2151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>蘑菇.io — 抢地盘原型</title>
+<style>
+  /* 浅色 + 软阴影 + 菌毯氛围 主题 */
+  :root{
+    --bg:#f5f2ea; --bg2:#efeae0;
+    --ink:#3a3a36; --ink-soft:#6a6a62; --line:#cfcfc6;
+    --sand:#f0e6da; --sand-deep:#e8ddcf;
+    --p:#3fb54a; --a1:#e8654f; --a2:#e0a02f; --neu:#9a9a8e;
+    --p-soft:#d9f2dc; --a1-soft:#fadcd4; --a2-soft:#f8e8c2; --neu-soft:#e6e2d8;
+    --shadow:0 1px 3px rgba(60,55,40,.10), 0 2px 6px rgba(60,55,40,.06);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; overflow:hidden;}
+  /* HUD 改成"菌毯占比条" */
+  #hud{position:fixed; top:0; left:0; right:0; height:64px; display:flex; align-items:center;
+    gap:14px; padding:0 16px; font-size:13px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#fcfaf4 0%, rgba(247,247,242,.88) 100%);
+    backdrop-filter:blur(8px) saturate(1.1); z-index:10;
+    box-shadow:0 2px 12px rgba(60,55,40,.07);}
+  #hud .camp{flex:1; display:flex; align-items:center; gap:8px; min-width:0; transition:opacity .3s ease;}
+  /* 领先方：进度条发光 + 百分比后带皇冠 */
+  #hud .camp.leader .bar{box-shadow:inset 0 1px 2px rgba(0,0,0,.05), 0 0 0 2px #fff, 0 0 12px rgba(120,180,90,.45);}
+  #hud .camp.leader .pct::after{content:" 👑"; font-size:11px;}
+  #hud .camp .name{font-weight:600; font-size:12px; color:var(--ink-soft); width:24px; text-align:right; flex-shrink:0;}
+  #hud .camp.player .name{color:var(--p);}
+  #hud .camp.red .name{color:var(--a1);}
+  #hud .camp.amber .name{color:var(--a2);}
+  #hud .bar{flex:1; height:14px; background:var(--bg2); border-radius:7px; overflow:hidden;
+    border:1px solid var(--line); position:relative; box-shadow:inset 0 1px 2px rgba(0,0,0,.05);}
+  #hud .bar .fill{height:100%; width:0%; transition:width .25s ease; border-radius:7px;}
+  #hud .camp.player .fill{background:linear-gradient(90deg, var(--p), #6ccb64);}
+  #hud .camp.red .fill{background:linear-gradient(90deg, var(--a1), #f0856f);}
+  #hud .camp.amber .fill{background:linear-gradient(90deg, var(--a2), #eebc55);}
+  #hud .pct{font-variant-numeric:tabular-nums; font-weight:700; font-size:13px; width:52px; text-align:left; flex-shrink:0;}
+  #hud .chip{display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:10px;
+    background:#fff; border:1px solid var(--line); box-shadow:var(--shadow); font-size:13px;}
+  #hud button{font:inherit; border:1px solid var(--line); background:#fff; color:var(--ink);
+    padding:6px 12px; border-radius:8px; cursor:pointer; box-shadow:var(--shadow);
+    transition:transform .12s ease, box-shadow .12s ease;}
+  #hud button:hover{transform:translateY(-1px); box-shadow:0 3px 8px rgba(60,55,40,.16);}
+  #hud button:active{background:#eee; transform:translateY(0);}
+  /* 集结悬浮手柄：右下角圆形，不占顶栏/底栏；拖动时浮到最上层 */
+  #rallyBtn{position:fixed; bottom:calc(84px + env(safe-area-inset-bottom,0px)); right:16px; z-index:15;
+    width:52px; height:52px; border-radius:50%; font:inherit; font-size:20px; line-height:1; cursor:grab;
+    border:1.5px solid #e0a02f; background:rgba(255,247,224,.92); backdrop-filter:blur(4px);
+    color:#8a6a12; box-shadow:0 4px 12px rgba(60,55,40,.18);
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;}
+  #rallyBtn:hover{transform:translateY(-2px); box-shadow:0 6px 16px rgba(60,55,40,.26);}
+  #rallyBtn:active{cursor:grabbing;}
+  #rallyBtn.rallying{transform:scale(1.25); z-index:60; cursor:grabbing;
+    background:linear-gradient(180deg,#ffe9b8,#ffd98a); box-shadow:0 10px 24px rgba(60,55,40,.35);}
+  /* 拖动提示气泡（松手=集结） */
+  #rallyHint{position:fixed; bottom:calc(146px + env(safe-area-inset-bottom,0px)); right:16px; z-index:59;
+    display:none; padding:6px 12px; border-radius:999px; font-size:12px; color:#8a6a12; font-weight:600;
+    background:rgba(255,247,224,.95); border:1px solid #e0a02f; box-shadow:var(--shadow);
+    animation:cardPop .2s cubic-bezier(.2,1.4,.4,1);}
+  @media (max-width:560px){
+    #rallyBtn{width:46px; height:46px; font-size:17px; bottom:calc(76px + env(safe-area-inset-bottom,0px));}
+    #rallyHint{bottom:calc(132px + env(safe-area-inset-bottom,0px)); font-size:11px;}
+  }
+  #tip{position:fixed; bottom:14px; left:50%; transform:translateX(-50%); font-size:12.5px; color:var(--ink-soft); z-index:10;
+    background:rgba(255,255,255,.85); backdrop-filter:blur(6px); border:1px solid var(--line); border-radius:999px;
+    padding:7px 16px; box-shadow:var(--shadow); white-space:nowrap; max-width:calc(100vw - 24px);
+    overflow:hidden; text-overflow:ellipsis;}
+  #tip kbd{display:inline-block; padding:1px 6px; border-radius:4px; background:#fff; border:1px solid var(--line);
+    box-shadow:0 1px 0 var(--line); font-family:inherit; font-size:11px;}
+  /* 遮罩通用入场动画 */
+  @keyframes overlayFade{from{opacity:0} to{opacity:1}}
+  @keyframes cardPop{from{opacity:0; transform:scale(.88) translateY(10px)} to{opacity:1; transform:scale(1) translateY(0)}}
+  /* 胜利/失败 横幅 */
+  #banner{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.55), rgba(247,247,242,.94) 70%);
+    backdrop-filter:blur(4px); z-index:20; text-align:center; padding:32px; animation:overlayFade .25s ease;}
+  #banner .card{padding:36px 56px; border-radius:20px; background:#fff; box-shadow:0 12px 36px rgba(60,55,40,.18);
+    border:1px solid var(--line); max-width:440px; animation:cardPop .4s cubic-bezier(.2,1.4,.4,1);}
+  #banner .icon{font-size:64px; line-height:1; margin-bottom:8px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.12));
+    display:inline-block; animation:iconBounce .6s cubic-bezier(.2,1.6,.4,1);}
+  @keyframes iconBounce{0%{transform:scale(0) rotate(-20deg)} 100%{transform:scale(1) rotate(0)}}
+  #banner h1{font-size:30px; margin:0 0 8px; letter-spacing:1px;}
+  #banner h1.win{background:linear-gradient(90deg, var(--p), #6ccb64); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  #banner h1.lose{color:var(--ink);}
+  #banner p{margin:0 0 22px; color:var(--ink-soft); font-size:14px; line-height:1.6;}
+  #banner button{font:inherit; font-size:15px; border:1px solid var(--line); background:linear-gradient(180deg,#ffffff,#f6f3ec);
+    padding:10px 26px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow); font-weight:600;}
+  #banner button:hover{transform:translateY(-1px); box-shadow:0 4px 8px rgba(60,55,40,.18);}
+  /* 开局选阵营 */
+  #factionSelect{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.72), rgba(247,247,242,.97) 70%);
+    backdrop-filter:blur(5px); z-index:36; padding:20px; overflow:auto; animation:overlayFade .25s ease;}
+  #factionSelect .fs-card{max-width:780px; width:100%; text-align:center; animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
+  #factionSelect h1{font-size:26px; margin:0 0 4px; letter-spacing:1px;}
+  #factionSelect .fs-sub{margin:0 0 18px; color:var(--ink-soft); font-size:14px;}
+  #factionSelect .fs-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+  @media(min-width:680px){ #factionSelect .fs-grid{grid-template-columns:repeat(4,1fr);} }
+  .fs-faction{font:inherit; text-align:left; background:#fff; border:1px solid var(--line);
+    border-top:3px solid var(--fac-accent, var(--line));
+    border-radius:14px; padding:14px; cursor:pointer; box-shadow:var(--shadow);
+    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;}
+  .fs-faction:hover{transform:translateY(-3px); box-shadow:0 6px 16px rgba(60,55,40,.16);
+    border-color:var(--fac-accent, var(--line));}
+  .fs-faction:active{transform:translateY(-1px);}
+  .fs-faction .fs-top{display:flex; align-items:center; gap:8px; margin-bottom:2px;}
+  .fs-faction .fs-dot{width:12px; height:12px; border-radius:50%; flex-shrink:0;}
+  .fs-faction .fs-name{font-weight:700; font-size:16px;}
+  .fs-faction .fs-tag{font-size:12px; color:var(--ink-soft); margin-bottom:10px;}
+  .fs-faction .fs-traits{display:flex; flex-direction:column; gap:5px;}
+  .fs-trait{display:flex; align-items:center; justify-content:space-between; font-size:12px;}
+  .fs-trait .fs-k{color:var(--ink-soft);}
+  .fs-trait .fs-v{font-weight:700;}
+  .fs-trait .good{color:#2e9e4f;} .fs-trait .bad{color:#cf4b3a;} .fs-trait .neu{color:#9a9a8e;}
+  #factionSelect .fs-foot{margin:18px 0 0; font-size:12px; color:var(--ink-soft);}
+  /* 层级（低→高）：canvas(0) < hud/tip(10) < banner(20) < pause(25) < 开始(30) < 难度(33) < 阵营(36) < 升级(40) */
+  /* 开局标题/开始游戏 */
+  #startScreen{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.6), rgba(247,247,242,.97) 70%);
+    backdrop-filter:blur(4px); z-index:30; text-align:center; padding:32px; animation:overlayFade .3s ease;}
+  #startScreen .ss-card{max-width:460px; animation:cardPop .4s cubic-bezier(.2,1.3,.4,1);}
+  #startScreen .ss-deco{font-size:24px; letter-spacing:16px; margin-bottom:2px;}
+  #startScreen .ss-deco span{display:inline-block; animation:bob 2.4s ease-in-out infinite;}
+  #startScreen .ss-deco span:nth-child(2){animation-delay:.4s;}
+  #startScreen .ss-deco span:nth-child(3){animation-delay:.8s;}
+  @keyframes bob{0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)}}
+  #startScreen .ss-icon{font-size:72px; line-height:1; margin-bottom:6px; filter:drop-shadow(0 4px 6px rgba(0,0,0,.12));
+    display:inline-block; animation:bob 3s ease-in-out infinite;}
+  #startScreen h1{font-size:40px; margin:0 0 6px; letter-spacing:2px;
+    background:linear-gradient(90deg, var(--p), #6ccb64); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  #startScreen .ss-sub{margin:0 0 26px; color:var(--ink-soft); font-size:15px;}
+  #startScreen .ss-start{font:inherit; font-size:17px; border:1px solid var(--line);
+    background:linear-gradient(180deg,#ffffff,#f6f3ec); padding:12px 40px; border-radius:12px; cursor:pointer;
+    box-shadow:var(--shadow); font-weight:700; transition:transform .12s ease, box-shadow .12s ease;}
+  #startScreen .ss-start:hover{transform:translateY(-2px); box-shadow:0 6px 16px rgba(60,55,40,.18);}
+  #startScreen .ss-foot{margin:22px 0 0; font-size:12px; color:var(--ink-soft); line-height:1.7;}
+  /* 暂停遮罩 */
+  #pauseOverlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column;
+    background:rgba(247,247,242,.78); backdrop-filter:blur(5px); z-index:25; text-align:center; padding:32px;
+    animation:overlayFade .2s ease;}
+  #pauseOverlay .po-card{max-width:360px;}
+  #pauseOverlay h1{font-size:30px; margin:0 0 18px; letter-spacing:2px;}
+  #pauseOverlay button{font:inherit; font-size:15px; border:1px solid var(--line); background:linear-gradient(180deg,#ffffff,#f6f3ec);
+    padding:10px 30px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow); font-weight:600;}
+  #pauseOverlay button:hover{transform:translateY(-1px); box-shadow:0 4px 8px rgba(60,55,40,.18);}
+  canvas{display:block; touch-action:none;}
+  /* 难度选择遮罩 */
+  #diffSelect{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.72), rgba(247,247,242,.97) 70%);
+    backdrop-filter:blur(5px); z-index:33; padding:20px; overflow:auto; animation:overlayFade .25s ease;}
+  #diffSelect .ds-card{max-width:560px; width:100%; text-align:center; animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
+  #diffSelect h1{font-size:26px; margin:0 0 4px; letter-spacing:1px;}
+  #diffSelect .ds-sub{margin:0 0 16px; color:var(--ink-soft); font-size:13px;}
+  #diffSelect .ds-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+  .ds-item{font:inherit; text-align:center; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:10px 4px; cursor:pointer; box-shadow:var(--shadow); transition:transform .12s ease, border-color .12s ease, opacity .2s;}
+  .ds-item:hover{transform:translateY(-2px);}
+  .ds-item .ds-n{font-size:16px; font-weight:700; display:block;}
+  .ds-item .ds-b{font-size:11px; color:var(--ink-soft); display:block; margin-top:2px;}
+  .ds-item.sel{border-color:#3fb54a; box-shadow:0 0 0 2px #3fb54a55, var(--shadow);}
+  .ds-item.locked{opacity:.45; cursor:not-allowed; background:#f1eee6;}
+  .ds-item.locked:hover{transform:none;}
+  #diffSelect .ds-foot{margin:14px 0 0; font-size:12px; color:var(--ink-soft);}
+  /* 升级与配置遮罩（最高层：从开始界面进入必须盖住首页） */
+  #upgradeScreen{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 35%, rgba(255,255,255,.72), rgba(247,247,242,.97) 70%);
+    backdrop-filter:blur(5px); z-index:40; padding:16px; overflow:auto; animation:overlayFade .25s ease;}
+  #upgradeScreen .ug-card{max-width:640px; width:100%; background:#fff; border:1px solid var(--line);
+    border-radius:18px; padding:22px 22px 18px; box-shadow:0 12px 36px rgba(60,55,40,.16); animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
+  #upgradeScreen h1{font-size:22px; margin:0 0 2px; letter-spacing:1px; text-align:center;}
+  #upgradeScreen .ug-gold{text-align:center; margin:0 0 14px; font-size:14px; color:var(--ink-soft);}
+  #upgradeScreen .ug-gold b{color:#b8860b; font-size:16px;}
+  .ug-sec{margin-bottom:14px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:#fcfaf4;}
+  .ug-sec .ug-title{font-weight:700; font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+  .ug-sec .ug-desc{font-size:11px; color:var(--ink-soft); margin-bottom:8px; line-height:1.5;}
+  .ug-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .ug-btn{font:inherit; font-size:12px; border:1px solid var(--line); background:#fff; border-radius:10px;
+    padding:8px 10px; cursor:pointer; text-align:left; line-height:1.35; box-shadow:var(--shadow);
+    transition:transform .1s ease, border-color .12s ease;}
+  .ug-btn:hover{transform:translateY(-1px);}
+  .ug-btn .ug-t{font-weight:600; display:block;}
+  .ug-btn .ug-s{font-size:11px; color:var(--ink-soft); display:block;}
+  .ug-btn.can{background:linear-gradient(180deg,#fff7e0,#ffe9b8); border-color:#e0a02f; cursor:pointer;}
+  .ug-btn.can:hover{border-color:#b8860b;}
+  .ug-btn.max{opacity:.6; cursor:default;}
+  .ug-btn.max:hover{transform:none;}
+  .ug-btn.lockedM{opacity:.5; cursor:pointer; background:#f5f2ea;}
+  .ug-btn.mode.on{border-color:#3fb54a; box-shadow:0 0 0 2px #3fb54a55, var(--shadow); background:#eaf7ec;}
+  .ug-btn.mode.off{border-color:var(--line);}
+  #upgradeScreen .ug-back{display:block; margin:4px auto 0; font:inherit; font-size:14px; border:1px solid var(--line);
+    background:linear-gradient(180deg,#ffffff,#f6f3ec); padding:9px 34px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow); font-weight:600;}
+  #upgradeScreen .ug-back:hover{transform:translateY(-1px); box-shadow:0 4px 8px rgba(60,55,40,.18);}
+  /* 暂停遮罩扩展：音量滑杆 + 按钮行 */
+  #pauseOverlay .po-vol{margin:0 0 16px; display:flex; align-items:center; gap:10px; font-size:13px; color:var(--ink-soft);}
+  #pauseOverlay .po-vol input[type=range]{flex:1; accent-color:#3fb54a;}
+  #pauseOverlay .po-btns{display:flex; gap:10px; justify-content:center;}
+  #pauseOverlay .po-btns button{font:inherit; font-size:14px; border:1px solid var(--line); background:linear-gradient(180deg,#ffffff,#f6f3ec);
+    padding:10px 20px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow); font-weight:600;}
+  #pauseOverlay .po-btns button:hover{transform:translateY(-1px); box-shadow:0 4px 8px rgba(60,55,40,.18);}
+  #pauseOverlay .po-btns .ghost{background:#fff; color:var(--ink-soft); font-weight:500;}
+  /* 开始界面升级入口 */
+  #startScreen .ss-row{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:14px;}
+  #startScreen .ss-upgrade{font:inherit; font-size:14px; border:1px solid var(--line); background:#fff;
+    padding:10px 22px; border-radius:12px; cursor:pointer; box-shadow:var(--shadow); font-weight:600;}
+  #startScreen .ss-upgrade:hover{transform:translateY(-2px); box-shadow:0 6px 16px rgba(60,55,40,.18);}
+  #startScreen .ss-goldchip{display:inline-flex; align-items:center; gap:4px; font-size:13px; color:var(--ink-soft); padding:5px 12px;
+    border-radius:999px; background:#fff; border:1px solid var(--line); box-shadow:var(--shadow);}
+  #startScreen .ss-goldchip b{color:#b8860b; font-size:14px;}
+  /* 移动端安全区适配 */
+  #hud{padding-top:calc(env(safe-area-inset-top,0px) + 0px);}
+  #tip{bottom:calc(14px + env(safe-area-inset-bottom,0px));}
+  @media (max-width:560px){
+    #diffSelect .ds-grid{grid-template-columns:repeat(5,1fr); gap:6px;}
+    .ds-item{padding:8px 2px;}
+    .ds-item .ds-n{font-size:13px;}
+    #upgradeScreen .ug-card{padding:16px 14px;}
+    #hud{height:56px; padding:0 10px; gap:8px; font-size:12px;}
+    #hud .pct{font-size:12px; width:44px;}
+    #hud .chip{font-size:11px; padding:4px 8px;}
+    #hud button{padding:5px 9px; font-size:12px;}
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="camp player"><span class="name" id="pName">河南</span><div class="bar"><div class="fill" id="pFill"></div></div><span class="pct" id="pPct">0%</span></div>
+  <div class="camp red"><span class="name" id="a1Name">上海</span><div class="bar"><div class="fill" id="a1Fill"></div></div><span class="pct" id="a1Pct">0%</span></div>
+  <div class="camp amber"><span class="name" id="a2Name">北京</span><div class="bar"><div class="fill" id="a2Fill"></div></div><span class="pct" id="a2Pct">0%</span></div>
+  <span class="chip">难度 <span id="diffChip">1</span></span>
+  <span class="chip">⏱ <span id="time">0:00</span></span>
+  <button id="restart">重开</button>
+  <button id="pauseBtn">暂停</button>
+</div>
+<div id="tip"><kbd>按住绿色节点</kbd> → <kbd>拖向任意节点</kbd> → <kbd>松手派兵</kbd> · 每颗飞出的球 = 1 个兵，路中相遇会互打 · <kbd>⚑ 集结</kbd> 拖到建筑 = 全军过去</div>
+<div id="banner"><div class="card"><div class="icon" id="bannerIcon">🍄</div><h1 id="bannerTitle"></h1><p id="bannerSub"></p><button id="bannerBtn">再来一局</button></div></div>
+<div id="factionSelect">
+  <div class="fs-card">
+    <h1>选择你的阵营</h1>
+    <p class="fs-sub">每个阵营有长有短，挑一个开干</p>
+    <div class="fs-grid" id="fsGrid"></div>
+    <p class="fs-foot">你固定为绿色；红、黄两家 AI 会从剩下阵营里随机抽</p>
+  </div>
+</div>
+<div id="startScreen">
+  <div class="ss-card">
+    <div class="ss-deco"><span>🍄</span><span>🌿</span><span>🍄</span></div>
+    <div class="ss-icon">🍄</div>
+    <h1>蘑菇.io</h1>
+    <p class="ss-sub">菌毯扩张 · 派兵互攻 · 选个阵营开干</p>
+    <button id="startBtn" class="ss-start">开始游戏</button>
+    <div class="ss-row">
+      <button id="upgradeBtn" class="ss-upgrade">升级与配置 🪙</button>
+      <span class="ss-goldchip">金币 <b id="ssGold">0</b></span>
+    </div>
+    <p class="ss-foot">按住自己的节点拖向目标即可派兵<br>路中相遇会互打 · 每胜一局得 5 金币 · 金币用于升级养成</p>
+  </div>
+</div>
+<div id="diffSelect">
+  <div class="ds-card">
+    <h1>选择难度</h1>
+    <p class="ds-sub">敌人每档强化：血量 / 攻击 +20%，产速 +10%，移动 +5% · 通关当前难度解锁下一档</p>
+    <div class="ds-grid" id="dsGrid"></div>
+    <p class="ds-foot">当前：<b id="dsCur">难度 1</b> · 已解锁：<b id="dsUnlocked">难度 1</b></p>
+    <button id="dsBack" style="margin-top:14px; font:inherit; font-size:13px; border:1px solid var(--line); background:#fff; padding:8px 24px; border-radius:10px; cursor:pointer; box-shadow:var(--shadow);">返回</button>
+  </div>
+</div>
+<div id="upgradeScreen">
+  <div class="ug-card">
+    <h1>升级与配置</h1>
+    <p class="ug-gold">🪙 <b id="ugGold">0</b> · 每次提升花费 <b>3</b> 🪙 · 升级与解锁全局生效</p>
+    <div id="ugBody"></div>
+    <button id="ugBack" class="ug-back">返回</button>
+  </div>
+</div>
+<div id="pauseOverlay">
+  <div class="po-card">
+    <h1>已暂停</h1>
+    <div class="po-vol"><label>音量</label><input type="range" id="volSlider" min="0" max="100" step="1"></div>
+    <div class="po-btns">
+      <button id="resumeBtn">继续</button>
+      <button id="backTitleBtn" class="ghost">返回开始界面</button>
+    </div>
+  </div>
+</div>
+<canvas id="cv"></canvas>
+<!-- 集结悬浮手柄：右下角，不占顶栏/底栏，拖动到建筑 = 全军集结 -->
+<button id="rallyBtn" title="按住拖到任意建筑，松手=全军集结到该点">⚑</button>
+<div id="rallyHint">松手 = 全军集结到该建筑</div>
+
+<script>
+"use strict";
+// ===================== 配置（均为 [PLACEHOLDER]，待 playtest 重调） =====================
+const CFG = {
+  growthRate: 0.05,      // 每秒按容量增长的百分比（5%/s）
+  fleetSpeed: 120,       // 球飞行速度基准 px/s（设计基准，勿直接改来调手感）
+  fleetSpeedMul: 0.8,    // 球行走速度倍率（可配置）：1=原速，0.8=八成速，0.5=减半
+  aiTick: 1.4,           // AI 决策间隔 s
+  emitDur: 0.6,          // 出兵"陆续出球"的发射持续时长 s（越大出球间隔越宽）
+  ballSepR: 7,           // 球碰撞/分离半径 px（两球中心最小间距 = 2×此值）
+  ballPush: 40,          // 球间分离推力 px/s（越大挤得越开）
+  ballSpring: 0.2,       // 球回到路径锚点的弹性（越大越快归位）
+  shotSpeed: 340,        // 弹道（箭矢）飞行速度 px/s
+  towerCap: 10,          // 箭塔驻军上限（塔兵自然回复上限）
+  // 兵种数值（按用户给定）
+  units: {
+    // 普通建筑出来的兵（步兵）
+    melee:  { atk:10, hp:30, rate:0.5, radius:5.0, range:0,   color:null },
+    // 弓箭手兵营出来的兵（弓手：远程，站着不动打行进中的敌兵）
+    archer: { atk:10, hp:20, rate:1.0, radius:5.0, range:190, color:null }, // 弓手攻击翻倍（黎总：所有弓手系 atk ×2，弩手/神射手基于此翻倍）
+    // 箭塔（建筑，自身远程攻击）
+    tower:  { atk:10, hp:9999, rate:1.0, radius:12, range:230, color:null }
+  },
+  // 阵营（开局可选）：每个乘数 >1 强化、<1 削弱；成对取舍，无"全面更强"
+  factions: {
+    henan:     { name:'河南', tag:'中原粮仓', emitMul:0.7,  speedMul:1.0,  hpMul:0.85, atkMul:1.0,  towerMul:1.0  },
+    shanghai:  { name:'上海', tag:'魔都精工', emitMul:1.2,  speedMul:1.0,  hpMul:1.18, atkMul:1.12, towerMul:1.0  },
+    beijing:   { name:'北京', tag:'帝都铁壁', emitMul:1.0,  speedMul:0.9,  hpMul:1.0,  atkMul:1.0,  towerMul:1.4  },
+    guangdong: { name:'广东', tag:'岭南突击', emitMul:0.9,  speedMul:1.25, hpMul:0.9,  atkMul:1.0,  towerMul:0.85 },
+  },
+  colors: { 0:"#b8b8b0", 1:"#3fb54a", 2:"#e8654f", 3:"#e0a02f" }
+};
+
+// ===================== 音效（WebAudio 合成，零素材） =====================
+const Sfx = {
+  ctx:null, vol:0.7, _last:{send:0,hit:0,conquer:0},
+  init(){ if(this.ctx) return; try{ this.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} },
+  tone(f, dur, type, vol, slideTo){
+    if(!this.ctx) return;
+    const t0=this.ctx.currentTime;
+    const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type||"sine";
+    o.frequency.setValueAtTime(f,t0);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo), t0+dur);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001,vol*this.vol), t0+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(t0); o.stop(t0+dur+0.03);
+  },
+  play(name){
+    if(!this.ctx) this.init();
+    const now = performance.now();
+    switch(name){
+      case "ui": this.tone(660,.08,"triangle",.5); break;
+      case "send":
+        if(now-this._last.send<140) return;
+        this._last.send=now; this.tone(300,.10,"sine",.4,460); break;
+      case "hit":
+        if(now-this._last.hit<90) return;
+        this._last.hit=now; this.tone(170,.05,"square",.18,95); break;
+      case "conquer":
+        if(now-this._last.conquer<300) return;
+        this._last.conquer=now;
+        this.tone(440,.14,"triangle",.5,880);
+        setTimeout(()=>this.tone(660,.12,"triangle",.4,990),70); break;
+      case "win": [523,659,784].forEach((f,i)=>setTimeout(()=>this.tone(f,.18,"triangle",.5),i*140)); break;
+      case "lose":[392,330,262].forEach((f,i)=>setTimeout(()=>this.tone(f,.22,"sine",.45),i*160)); break;
+    }
+  }
+};
+
+// ===================== 局外进度（localStorage）：金币 / 提升树 / 队伍配置 / 难度 =====================
+const SAVE_KEY="mw_prog", DIFF_KEY="mw_diff", UNLK_KEY="mw_unlocked", VOL_KEY="mw_vol";
+function loadJSON(k, def){ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?def:v; }catch(e){ return def; } }
+let _progCache = null; // 内存缓存：游戏内每帧读养成数据，避免反复读 localStorage
+function getProg(){
+  if(_progCache) return _progCache;
+  const p = loadJSON(SAVE_KEY, null) || { gold:0, levels:{hp:0,atk:0,spd:0,prod:0,cap:0,start:0,move:0,melee:0,archer:0,tower:0}, loadout:{melee:0,archer:0,tower:0} };
+  // 兜底：缺字段补默认，防止旧存档崩溃
+  if(typeof p.gold!=='number') p.gold=0;
+  if(!p.levels) p.levels={hp:0,atk:0,spd:0,prod:0,cap:0,start:0,move:0,melee:0,archer:0,tower:0};
+  if(!p.loadout) p.loadout={melee:0,archer:0,tower:0};
+  for(const k of ["hp","atk","spd","prod","cap","start","move","melee","archer","tower"]){ if(typeof p.levels[k]!=='number') p.levels[k]=0; }
+  for(const k of ["melee","archer","tower"]){ if(typeof p.loadout[k]!=='number') p.loadout[k]=0; p.loadout[k]=Math.min(p.loadout[k], p.levels[k]); }
+  _progCache = p;
+  return p;
+}
+function saveProg(p){ _progCache = p; localStorage.setItem(SAVE_KEY, JSON.stringify(p)); }
+function getDiff(){ const d=parseInt(localStorage.getItem(DIFF_KEY),10); return (d>=1&&d<=15)?d:1; }
+function saveDiff(d){ localStorage.setItem(DIFF_KEY, String(d)); }
+function getUnlocked(){ const u=parseInt(localStorage.getItem(UNLK_KEY),10); return (u>=1&&u<=15)?u:1; }
+function saveUnlocked(u){ localStorage.setItem(UNLK_KEY, String(u)); }
+// 难度强化倍率：每档 +20%（1 → 1.00，15 → 3.80），作用于 AI 血量/攻击
+function diffMul(){ return 1 + (getDiff()-1)*0.20; }
+// AI 产速倍率：每档 +10%（独立维度，黎总要求：产速不跟血/攻一样猛）
+function diffProdMul(){ return 1 + (getDiff()-1)*0.10; }
+// AI 移动速度倍率：每档 +5%（独立维度，避免高难度下球速过激、拦截窗口消失）
+function diffSpeedMul(){ return 1 + (getDiff()-1)*0.05; }
+function diffPct(d){ return Math.round((d-1)*20); }
+
+// 全局数值升级（玩家阵营）：满级 hp+40% / atk+40% / 攻速+28% / 移速+15% / 产速+50% / 容量+50% / 开局+45%
+function playerBuffs(){
+  const L=getProg().levels;
+  return {
+    hpMul:   1 + L.hp*0.08,
+    atkMul:  1 + L.atk*0.08,
+    rateMul: Math.pow(0.92, L.spd),
+    speedMul:1 + L.move*0.05,
+    prodMul: 1 + L.prod*0.10,
+    capMul:  1 + L.cap*0.10,
+    startMul:1 + L.start*0.15
+  };
+}
+// 兵种形态（科技线）：可解锁、可在"队伍配置"里切换；只改数值不改机制
+const UNIT_MODS = {
+  melee: [
+    { name:"轻步兵",  tag:"标准步兵", hp:1,    atk:1,   rate:1,    speed:1,    desc:"均衡的近战单位" },
+    { name:"重装步兵",tag:"甲厚攻强", hp:1.40, atk:1.15, rate:1,    speed:0.88, desc:"血量+40% 攻击+15% 移速-12%" },
+    { name:"长矛兵",  tag:"破阵长矛", hp:1.10, atk:1.50, rate:1.2,  speed:1,    desc:"攻击+50% 攻速-20% 血量+10%" }
+  ],
+  archer: [
+    { name:"弓箭手", tag:"标准远程", hp:1,    atk:1,   rate:1,   speed:1,   range:1,    desc:"均衡的远程单位" },
+    { name:"弩手",   tag:"重弩穿甲", hp:1.10, atk:1.60, rate:1.33, speed:0.75, range:1.10, desc:"攻击+60% 射程+10% 攻速-33% 移速-25%" },
+    { name:"神射手", tag:"远程点杀", hp:0.80, atk:1.25, rate:0.90, speed:1,   range:1.20, desc:"射程+20% 攻击+25% 攻速+11% 血量-20%" }
+  ],
+  tower: [
+    { name:"瞭望塔", tag:"标准箭塔", atk:1,   rate:1,   range:1,  desc:"均衡的防御塔" },
+    { name:"炮塔",   tag:"重炮轰击", atk:1.40, rate:1,   range:1,  desc:"攻击+40%" },
+    { name:"双联塔", tag:"双塔齐射", atk:1.70, rate:1.18, range:1, desc:"攻击+70% 攻速-18%" }
+  ]
+};
+function unitMod(cls, idx){ const m=UNIT_MODS[cls]||[]; return m[idx]||m[0]; }
+// 箭塔实时数值（含玩家科技形态 + AI 难度强化），绘制与射击共用同一函数
+function towerStats(n){
+  const fm = facMul(n.owner);
+  const tmod = n.owner===1 ? unitMod("tower", getProg().loadout.tower) : {atk:1,rate:1,range:1};
+  const range = CFG.units.tower.range * fm.towerMul * (tmod.range||1);
+  let atk = CFG.units.tower.atk * fm.towerMul * (tmod.atk||1);
+  const rate = CFG.units.tower.rate * (tmod.rate||1);
+  if(n.owner===2 || n.owner===3) atk *= diffMul();
+  return { range, atk, rate };
+}
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR; cv.style.width=W+"px"; cv.style.height=H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener("resize", resize); resize();
+
+// ===================== 游戏状态 =====================
+let nodes=[], balls=[], shots=[], fx=[], aiTimers={}, aiGain={}, running=false, paused=false, startTime=0, lastTs=0, gameTime=0;
+// 视觉状态：悬停节点 / 占领震屏 / 背景渐变缓存
+let hoverNode=null, shake=0, bgGrad=null, bgKey="";
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+// 阵营分配：开局选阵营界面写入；1=玩家, 2/3=AI
+let factionOf = { 1:'henan', 2:'shanghai', 3:'beijing' };
+const FACTION_ORDER = ['henan','shanghai','beijing','guangdong'];
+// 取某势力的阵营乘数（缺省全 1，保证健壮性）
+function facMul(owner){
+  const f = CFG.factions[factionOf[owner]];
+  return f || { emitMul:1, speedMul:1, hpMul:1, atkMul:1, towerMul:1 };
+}
+
+// ===================== 不规则地图生成：有机岛屿 + Voronoi 分块领地 =====================
+// 对标占山为王2 的美术：岛屿外形、曲线边界、地块内放城堡图标 + 兵力数字
+let ISLAND=[]; // 岛屿多边形（仅岛屿外形与绘制用）
+const G_TOP=54; // 顶部 HUD 高度
+
+// 生成带噪声的有机岛屿多边形
+function createIslandPoly(cx,cy,rx,ry,segments){
+  const poly=[];
+  for(let i=0;i<segments;i++){
+    const a=(i/segments)*Math.PI*2;
+    const noise = 1 + 0.10*Math.sin(a*3 + Math.random()*Math.PI) + 0.05*Math.sin(a*7);
+    poly.push({ x: cx + Math.cos(a)*rx*noise, y: cy + Math.sin(a)*ry*noise });
+  }
+  return poly;
+}
+
+// 点在任意多边形内（射线法）
+function insidePoly(p,poly){
+  let c=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const pi=poly[i], pj=poly[j];
+    if(((pi.y>p.y)!==(pj.y>p.y)) && (p.x < (pj.x-pi.x)*(p.y-pi.y)/(pj.y-pi.y)+pi.x)) c=!c;
+  }
+  return c;
+}
+
+// 多边形面积（带符号，取绝对值）
+function polygonArea(poly){
+  let a=0;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    a += (poly[j].x+poly[i].x)*(poly[j].y-poly[i].y);
+  }
+  return Math.abs(a/2);
+}
+// 多边形质心（几何中心，Voronoi 单元内一定存在，用作建筑摆放点 → 真正居中）
+function polygonCentroid(poly){
+  let cx=0, cy=0, a=0;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const cross = poly[j].x*poly[i].y - poly[i].x*poly[j].y;
+    a += cross; cx += (poly[j].x+poly[i].x)*cross; cy += (poly[j].y+poly[i].y)*cross;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-6){ // 退化保护：退回顶点平均
+    let mx=0, my=0; for(const p of poly){ mx+=p.x; my+=p.y; } return {x:mx/poly.length, y:my/poly.length};
+  }
+  return { x: cx/(6*a), y: cy/(6*a) };
+}
+
+// Sutherland-Hodgman：用点 a 与 b 的垂直平分线裁剪多边形，保留含 a 的那一侧（Voronoi 单元）
+// 标准实现：逐边判断"在内侧(val<=0)则保留"，穿越边界时插入交点。修复了原版分支写反导致的重叠/畸形。
+function clipEdge(p, q, sd){
+  let t = sd(p)/(sd(p)-sd(q));
+  if(!isFinite(t)) t=0.5;
+  t = Math.max(0, Math.min(1, t));
+  return { x: p.x+(q.x-p.x)*t, y: p.y+(q.y-p.y)*t };
+}
+function clipPoly(poly, a, b){
+  if(poly.length<3) return [];
+  const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+  const dx=b.x-a.x, dy=b.y-a.y;
+  // 带符号距离：<0 在 a 侧（保留），>0 在 b 侧（丢弃）
+  const sd = p => (p.x-mx)*dx + (p.y-my)*dy;
+  const out=[];
+  let prev=poly[poly.length-1];
+  let prevIn = sd(prev) <= 0;
+  for(let i=0;i<poly.length;i++){
+    const cur=poly[i];
+    const curIn = sd(cur) <= 0;
+    if(curIn){
+      if(!prevIn) out.push(clipEdge(prev, cur, sd)); // 由外入内：交点
+      out.push(cur);
+    } else if(prevIn){
+      out.push(clipEdge(prev, cur, sd));             // 由内出外：交点
+    }
+    prev=cur; prevIn=curIn;
+  }
+  return out;
+}
+
+// 把多边形整体向质心 cg 内缩 f 比例（f=0.04 → 缩 4%），用于渲染：
+// 相邻格各自内缩后必然留出缝隙、绝不重叠（物理上消除格子相交），同时形成"分块"观感
+function insetPoly(poly, cg, f){
+  return poly.map(p=>({ x: p.x+(cg.x-p.x)*f, y: p.y+(cg.y-p.y)*f }));
+}
+
+// Chaikin 细分：把多边形角点磨成平滑曲线
+function chaikin(poly, iters){
+  let p=[...poly];
+  for(let k=0;k<iters;k++){
+    const q=[]; const n=p.length;
+    for(let i=0;i<n;i++){
+      const a=p[i], b=p[(i+1)%n];
+      q.push({x:a.x*0.75+b.x*0.25, y:a.y*0.75+b.y*0.25});
+      q.push({x:a.x*0.25+b.x*0.75, y:a.y*0.25+b.y*0.75});
+    }
+    p=q;
+  }
+  return p;
+}
+
+// 从候选中心里挑三个彼此距离之和最远的索引（三家起点拉开）
+function pickThreeFar(centers){
+  let best=[0,1,2], bestD=-1;
+  for(let a=0;a<centers.length;a++) for(let b=a+1;b<centers.length;b++) for(let c=b+1;c<centers.length;c++){
+    const d = dist(centers[a],centers[b])+dist(centers[b],centers[c])+dist(centers[c],centers[a]);
+    if(d>bestD){ bestD=d; best=[a,b,c]; }
+  }
+  return best;
+}
+
+function buildMap(){
+  nodes=[]; balls=[]; shots=[]; fx=[]; aiTimers={2:0,3:0}; aiGain={2:0,3:0};
+  const capTiers=[10,30,50];
+  const cx=W/2, cy=G_TOP+(H-G_TOP)/2;
+  const rx=Math.min(W,H-G_TOP)*0.44, ry=Math.min(W,H-G_TOP)*0.40;
+
+  // 1) 生成有机岛屿
+  ISLAND = createIslandPoly(cx,cy,rx,ry,40);
+
+  // 2) 在岛内"远离边界"处泊松采样生成地块中心（避免贴边产生细长条地块）
+  //    重试机制：优先大间距；若某次随机运气差导致中心不足 3 个（会崩），逐步缩距直至够数；
+  //    极端兜底：直接在主岛内铺一个三角形，保证永远 ≥3 个中心、游戏不会因采样失败而崩溃。
+  const margin = Math.min(rx,ry)*0.16;        // 采样区相对岛屿边界内缩，给边缘格留出饱满空间
+  const sx0=cx-rx+margin, sx1=cx+rx-margin, sy0=cy-ry+margin, sy1=cy+ry-margin;
+  let centers=[], minD = Math.min(rx,ry)*0.42; // 初始大间距 → 每个格子都够大、彼此不挤
+  for(let attempt=0; attempt<8; attempt++){
+    centers=[];
+    for(let i=0;i<1500 && centers.length<18;i++){
+      const p={ x: rand(sx0, sx1), y: rand(sy0, sy1) };
+      if(!insidePoly(p,ISLAND)) continue;
+      let ok=true;
+      for(const c of centers){ if(dist(p,c)<minD){ ok=false; break; } }
+      if(ok) centers.push(p);
+    }
+    if(centers.length>=3) break;   // 够数就停（尽量保留大间距）
+    minD *= 0.82;                  // 不够就缩距重试
+  }
+  // 兜底：若仍不足 3 个（极端小概率），用岛内确定性三角形补满 → 永远 ≥3，绝不崩溃
+  if(centers.length<3){
+    centers=[{x:cx, y:cy}, {x:cx-rx*0.5, y:cy+ry*0.3}, {x:cx+rx*0.5, y:cy-ry*0.3}];
+  }
+
+  const target = Math.min(centers.length, 16);   // 最多 16 格；绝不补 undefined（否则会崩）
+  const baseIdx = pickThreeFar(centers);
+  const baseSet = new Set(baseIdx);
+  const ownerMap={}; baseIdx.forEach((idx,k)=>ownerMap[idx]=k+1);
+
+  // 3) 对每个中心做 Voronoi 单元（被岛屿裁剪+平滑），再算质心当建筑中心
+  for(let i=0;i<target;i++){
+    const center=centers[i];
+    let cell=[...ISLAND];
+    for(let j=0;j<target;j++){
+      if(i===j) continue;
+      cell=clipPoly(cell, center, centers[j]);
+      if(cell.length<3) break;
+    }
+    if(cell.length<3) continue;
+    cell=chaikin(cell,2);
+    // 丢弃过小的退化格（基地格强制保留，保证三势力一定存在）
+    const isBase = baseSet.has(i);
+    if(!isBase && polygonArea(cell) < Math.min(rx,ry)*Math.min(rx,ry)*0.03) continue;
+    // 质心 = 建筑真正居中的位置；若裁剪畸形导致质心跑出格外，退回生成点（生成点必在格内）
+    let cg = polygonCentroid(cell);
+    if(!insidePoly(cg, cell)) cg = { x:center.x, y:center.y };
+    // 渲染用"内缩副本"：相邻格各自内缩后留缝、绝不重叠
+    const ipoly = insetPoly(cell, cg, 0.06);
+    // 代表性半径：质心到各顶点的平均距离，用于图标缩放（保证图标不溢出格子）
+    let rad=0; for(const v of cell) rad += dist(cg,v); rad/=cell.length;
+    const owner = ownerMap[i] || 0;
+    // 玩家基地吃养成（容量扩充 / 先遣军）：AI 基地保持基础值
+    const pb = playerBuffs();
+    const cap = owner ? (owner===1 ? Math.round(30*pb.capMul) : 30) : capTiers[Math.floor(Math.random()*3)];
+    const startPop = owner ? Math.round(cap*(owner===1 ? 0.6*pb.startMul : 0.6)) : Math.round(cap*rand(0.35,0.6));
+    nodes.push({ x:cg.x, y:cg.y, rad, owner, cap, pop:startPop, acc:0,
+      flash:0, conquer:0, poly:cell, ipoly, type:'village',
+      pending:0, atkCd:0, towerFx:null });
+  }
+
+  // 4) 预置中立箭塔 + 中立弓箭手兵营：在非基地中立格里随机挑
+  //    箭塔塔兵自然回复上限 = CFG.towerCap；弓箭手兵营产弓手
+  const neutral = nodes.filter(n=>n.owner===0 && n.type==='village');
+  // Fisher-Yates 洗牌，取前 2 座做箭塔、后 2 座做弓箭手兵营（数量可调）
+  for(let i=neutral.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [neutral[i],neutral[j]]=[neutral[j],neutral[i]];
+  }
+  const towerN=2, archeryN=2;
+  for(let i=0;i<neutral.length;i++){
+    if(i<towerN){
+      neutral[i].type='tower';
+      neutral[i].cap=CFG.towerCap;
+      neutral[i].pop=Math.min(neutral[i].pop, CFG.towerCap);
+    } else if(i<towerN+archeryN){
+      neutral[i].type='archery';
+    } else break;
+  }
+}
+
+function totalCap(){ return nodes.reduce((s,n)=>s+n.cap,0); }
+function ownerCap(owner){ return nodes.filter(n=>n.owner===owner).reduce((s,n)=>s+n.cap,0); }
+
+// ===================== 派兵（球实体化：逐颗走，数字逐颗-1） =====================
+// keep = 出兵后村里留下的兵数；玩家手动派默认留 1（"出到只剩一个兵"）
+// 机制：send 只"承诺"派出 cnt 颗球（记入 from.pending 防超发），
+//       每颗球按 delay 从村口真正走出时，才 from.pop--（建筑数字逐颗减少）。
+function send(from, to, keep){
+  if(!from || !to || from===to) return;
+  if(from.owner===0) return; // 中立不能主动派
+  if(keep===undefined) keep = 1;
+  const avail = from.pop - (from.pending||0); // 还没走出的承诺球不算可派
+  const cnt = avail - keep;
+  if(cnt < 1) return; // 兵不够，不出
+  from.pending = (from.pending||0) + cnt;
+  const cls = from.type==='archery' ? 'archer' : 'melee'; // 从弓兵营出=弓手，其他=步兵
+  const u = CFG.units[cls];
+  const fm = facMul(from.owner);
+  const isPlayer = from.owner===1;
+  // 数值结算：玩家吃"养成（升级+兵种形态）"，AI 吃"难度倍率"
+  let hp = u.hp*fm.hpMul, atk = u.atk*fm.atkMul, rate = u.rate, range = u.range, spd = 1;
+  if(isPlayer){
+    const pb = playerBuffs();
+    const mod = unitMod(cls, getProg().loadout[cls]);
+    hp    *= mod.hp   * pb.hpMul;
+    atk   *= mod.atk  * pb.atkMul;
+    rate  *= mod.rate * pb.rateMul;
+    range *= (mod.range||1);
+    spd    = mod.speed * pb.speedMul; // 兵种形态移速 × 养成移速强化
+  } else {
+    hp *= diffMul(); atk *= diffMul(); spd *= diffSpeedMul(); // AI：血/攻随难度 20%/档，移速 5%/档
+  }
+  const travel = Math.max(0.001, dist(from,to)/(CFG.fleetSpeed*CFG.fleetSpeedMul*fm.speedMul*spd));
+  for(let i=0;i<cnt;i++){
+    balls.push({
+      owner: from.owner, cls,
+      x: from.x, y: from.y,          // 当前像素位置
+      from, to,                       // 起始 / 目标节点
+      delay: (i/cnt)*CFG.emitDur*fm.emitMul,   // 错峰出发延迟（阵营影响出兵节奏）
+      age: 0, left: false, arrived: false, stopped: false,
+      lockTgt: null, collideFlash: 0,
+      travel,
+      hp, hpMax: hp,                  // 阵营加成后的血量（hpMax 用于血条比例）
+      atk, atkRate: rate, atkCd: Math.random()*rate,
+      radius: u.radius, range,
+      dead: false
+    });
+  }
+  Sfx.play("send");
+}
+
+// ===================== 战斗结算（逐球整数消融 + 超过上限继续累加） =====================
+// 每颗球到达节点时调用一次：同势力并入(+1，无上限)；异势力与一颗敌兵成对消融；敌兵清空后占领
+function arriveBall(node, owner){
+  if(node.owner === owner){
+    node.pop++;                      // 自己人回村 +1，超过 cap 也继续累加（自然增长受 cap 限制）
+  } else {
+    if(node.pop > 0){ node.pop--; node.flash = 0.3; Sfx.play("hit"); } // 与一颗敌兵打架消融，并闪一下
+    else {
+      node.owner = owner; node.pop = 1;
+      node.pending = 0;                        // 易主清掉旧主未出发的承诺
+      node.conquer = 0.85;                       // 占领瞬间的爆点光环
+      node.flash = 0;
+      shake = Math.max(shake, 0.14);           // 占领震屏（juice：占领是核心爽点）
+      if(owner===2 || owner===3) aiGain[owner] = gameTime; // 记录 AI 上次新占领（破僵局用）
+      Sfx.play("conquer");
+    }
+  }
+}
+
+// ===================== 球间分离（碰撞范围 + 挤开） =====================
+// 同一势力的球互相推开，避免叠成一个点；敌方球交给战斗系统（行进路上相撞互打），不参与分离，
+// 以免破坏核心的"空中对撞"机制。返回本帧应施加的位移向量（方向归一 + 强度封顶）。
+function separationOf(self){
+  let sx=0, sy=0;
+  const min = CFG.ballSepR * 2;   // 两球中心最小间距
+  const min2 = min*min;
+  for(let i=0;i<balls.length;i++){
+    const o = balls[i];
+    if(o===self || o.dead || !o.left) continue;
+    if(o.owner !== self.owner) continue;   // 敌方留给战斗系统处理
+    const dx = self.x - o.x, dy = self.y - o.y;
+    const d2 = dx*dx + dy*dy;
+    if(d2 < min2 && d2 > 1e-6){
+      const d = Math.sqrt(d2);
+      const f = (min - d) / d;             // 越近推得越狠
+      sx += dx * f;
+      sy += dy * f;
+    }
+  }
+  const mag = Math.hypot(sx, sy);
+  if(mag < 1e-6) return {x:0, y:0};
+  const strength = Math.min(mag, CFG.ballSepR);  // 单帧位移上限 = 分离半径，防弹飞
+  return { x: (sx/mag)*strength, y: (sy/mag)*strength };
+}
+
+// ===================== AI =====================
+function aiStep(owner){
+  const mine = nodes.filter(n=>n.owner===owner);
+  if(!mine.length) return;
+  const keepAI = 1;
+
+  // 补丁①防守回援：统计飞向每个己方节点的敌球数，受威胁节点优先派兵支援
+  const incoming = {};
+  for(const b of balls){
+    if(b.dead || !b.left || b.owner===owner || !b.to) continue;
+    if(b.to.owner===owner) incoming[b.to] = (incoming[b.to]||0) + 1;
+  }
+  let threat=null, threatLevel=0;
+  for(const n of mine){
+    const inc = incoming[n]||0;
+    if(inc >= Math.max(2, n.pop*0.35) && inc > threatLevel){ threat=n; threatLevel=inc; }
+  }
+  if(threat){
+    // 找最近的、能出兵的己方节点去支援（尽量不拆空前线：pop>5 的优先）
+    const guards = mine.filter(n=>n!==threat && n.pop>5).sort((a,b)=>dist(a,threat)-dist(b,threat));
+    if(guards.length){
+      send(guards[0], threat);
+      return;
+    }
+  }
+
+  // 补丁②/③：常规进攻（挑软柿子 + 僵局破局）
+  // 僵局判定：AI 超过 30s 没有新占领 → 放宽出兵门槛强攻，避免两家 AI 互瞪不动
+  const stuck = (gameTime - (aiGain[owner]||0)) > 30;
+  // 补丁④玩家劣势保护：玩家总容量占比低于 15% 时，两家 AI 更倾向互殴、不盯着玩家踩（给翻盘留窗口）
+  const playerRatio = totalCap() ? ownerCap(1)/totalCap() : 0;
+  const sparePlayer = playerRatio < 0.15;
+  const cands = mine.filter(n=>n.pop>5).sort((a,b)=>b.pop-a.pop);
+  for(const src of cands){
+    const sendable = src.pop - keepAI;
+    let best=null, bestScore=1e9;
+    for(const t of nodes){
+      if(t.owner===owner) continue;
+      const need = t.pop*(stuck ? 0.8 : 0.5); // 僵局放宽门槛
+      if(sendable < need) continue;
+      // 距离越近越好 + 驻军越少越好（挑软柿子）+ 中立大幅优先（领地蔓延）
+      let score = dist(src,t) + t.pop*0.35;
+      if(t.owner===0) score -= 1e6;
+      if(t.owner===1 && sparePlayer) score += 300; // 玩家弱势：降低"打玩家"的优先级（只倾向，不禁止）
+      if(score < bestScore){ bestScore=score; best=t; }
+    }
+    if(best){ send(src, best); break; } // 每个 AI 每 tick 只出一队，避免暴兵
+  }
+}
+
+// ===================== 主循环 =====================
+function update(dt){
+  // 0) 震屏衰减
+  if(shake > 0) shake = Math.max(0, shake - dt);
+
+  // 1) 产兵（整数化：按容量累积，满 1 兵才 +1；超 cap 不再自然增长）
+  //    玩家吃"产兵加速"养成，AI 吃难度倍率
+  const pb = playerBuffs();
+  for(const n of nodes){
+    if(n.owner===0) continue; // 中立不产
+    if(n.pop < n.cap){
+      const prodMul = n.owner===1 ? pb.prodMul : diffProdMul(); // AI 产速独立 10%/档
+      n.acc += n.cap*CFG.growthRate*prodMul*dt;
+      while(n.acc >= 1 && n.pop < n.cap){ n.pop++; n.acc -= 1; }
+      if(n.pop >= n.cap) n.acc = 0;
+    }
+    if(n.flash > 0) n.flash -= dt;
+    if(n.conquer > 0) n.conquer -= dt;
+    if(n.towerFx && (n.towerFx.t -= dt) <= 0) n.towerFx = null;
+  }
+
+  // 2) 球实体：出发扣数 + 移动 + 弓箭手站桩远程
+  for(let i=balls.length-1;i>=0;i--){
+    const b=balls[i];
+    if(b.dead){ balls.splice(i,1); continue; }
+    if(!b.left){
+      // 还没到出发时刻：攒 age，到 delay 才真正从村口走出 → 建筑数字逐颗 -1
+      b.age += dt;
+      if(b.age >= b.delay){
+        b.left = true;
+        b.popIn = 0.18;          // 出生缩放动画（从村口"弹"出来）
+        b.from.pop--;
+        if(b.from.pending > 0) b.from.pending--;
+      }
+      continue;
+    }
+    // 停火/阻挡判定
+    if(b.cls==='archer' && b.range>0){
+      // 弓手：射程内有敌方行进中的球 → 停下远程攻击（生成可见弹道 + 锁定线）
+      const tgt = findEnemyBallInRange(b);
+      if(tgt){
+        b.stopped = true;
+        b.lockTgt = tgt;          // 记录锁定目标（用于画锁定线）
+        b.atkCd -= dt;
+        if(b.atkCd <= 0){
+          b.atkCd = b.atkRate;
+          shots.push(makeShot(b, tgt, b.atk, b.radius));
+        }
+      } else { b.stopped = false; b.lockTgt = null; }
+    } else if(b.cls!=='archer'){
+      // 近战：与敌方球贴身接触 → 挡住（不穿过），原地由"空中对撞"持续互打；不画远程锁定线
+      const tgt = findEnemyBallInContact(b);
+      b.stopped = !!tgt;
+      if(!tgt) b.lockTgt = null;
+    }
+    // 路径锚点：行进中=沿路径的点，站桩=原地
+    let ax, ay;
+    if(b.stopped){ ax = b.x; ay = b.y; }
+    else {
+      b.flyT = (b.flyT||0) + dt;
+      const t = b.flyT / b.travel;
+      if(t >= 1){ arriveBall(b.to, b.owner); b.dead = true; continue; }
+      ax = b.from.x + (b.to.x-b.from.x)*t;
+      ay = b.from.y + (b.to.y-b.from.y)*t;
+    }
+    // 球间分离：同一势力互相挤开（碰撞范围），同时被弹簧拉回路径锚点
+    const sep = separationOf(b);
+    b.x += (ax - b.x)*CFG.ballSpring + sep.x * CFG.ballPush * dt;
+    b.y += (ay - b.y)*CFG.ballSpring + sep.y * CFG.ballPush * dt;
+    // 近战冷却每帧递减（弓箭手的冷却在锁定分支内递减，这里不重复减）
+    if(b.cls!=='archer') b.atkCd -= dt;
+    if(b.popIn > 0) b.popIn -= dt;   // 出生缩放动画计时
+    if(b.hp <= 0){ spawnBurst(b.x, b.y, CFG.colors[b.owner]); b.dead = true; }
+  }
+  // 清一次死亡
+  for(let i=balls.length-1;i>=0;i--) if(balls[i].dead) balls.splice(i,1);
+
+  // 3) 空中对撞：不同势力球在行进路上碰到 → 互打至一方消失/离开范围
+  //    碰撞时产生火花，让"打架"肉眼可见
+  for(let i=0;i<balls.length;i++){
+    const a=balls[i];
+    if(a.dead) continue;
+    for(let j=i+1;j<balls.length;j++){
+      const c=balls[j];
+      if(c.dead || c.owner===a.owner) continue;
+      const rr = a.radius + c.radius;
+      const dx=a.x-c.x, dy=a.y-c.y;
+      if(dx*dx + dy*dy <= rr*rr){
+        const hit = a.atkCd<=0 || c.atkCd<=0;
+        if(a.atkCd<=0){ c.hp-=a.atk; a.atkCd=a.atkRate; if(c.hp<=0)c.dead=true; }
+        if(c.atkCd<=0){ a.hp-=c.atk; c.atkCd=c.atkRate; if(a.hp<=0)a.dead=true; }
+        if(hit){ spawnBurst((a.x+c.x)/2, (a.y+c.y)/2, CFG.colors[a.owner]); a.collideFlash=0.12; c.collideFlash=0.12; Sfx.play("hit"); }
+      }
+    }
+  }
+  // 碰撞白闪衰减
+  for(const b of balls){ if(b.collideFlash>0) b.collideFlash -= dt; }
+  for(let i=balls.length-1;i>=0;i--) if(balls[i].dead){ spawnBurst(balls[i].x, balls[i].y, CFG.colors[balls[i].owner]); balls.splice(i,1); }
+
+  // 4) 箭塔射击：被占领的箭塔自动远程攻击攻击范围内敌方行进中的球（可见弹道）
+  for(const n of nodes){
+    if(n.type!=='tower' || n.owner===0) continue;
+    const ts = towerStats(n); // 玩家吃科技形态，AI 吃难度倍率
+    n.atkCd -= dt;
+    if(n.atkCd > 0) continue;
+    const tgt = findEnemyBallNearNode(n, ts.range);
+    if(tgt){
+      n.atkCd = ts.rate;
+      shots.push(makeShot(n, tgt, ts.atk, CFG.units.tower.radius));
+      n.towerFx = { t:0.3, tx:tgt.x, ty:tgt.y }; // 塔口闪光
+    }
+  }
+
+  // 5) 弹道推进：每帧朝目标飞行，命中（贴近）时结算伤害 + 命中火花
+  for(let i=shots.length-1;i>=0;i--){
+    const s=shots[i];
+    if(s.dead){ shots.splice(i,1); continue; }
+    if(!s.tgt || s.tgt.dead){ spawnBurst(s.x, s.y, CFG.colors[s.owner]); shots.splice(i,1); continue; }
+    const dx=s.tgt.x-s.x, dy=s.tgt.y-s.y;
+    const d=Math.hypot(dx,dy);
+    const step=CFG.shotSpeed*dt;
+    if(d <= step + 2){
+      // 命中结算
+      s.tgt.hp -= s.dmg;
+      spawnBurst(s.tgt.x, s.tgt.y, CFG.colors[s.owner]);
+      s.tgt.collideFlash = 0.12;
+      if(s.tgt.hp <= 0) s.tgt.dead = true;
+      shots.splice(i,1);
+      continue;
+    }
+    s.x += dx/d*step;
+    s.y += dy/d*step;
+  }
+
+  // 6) 粒子推进
+  for(let i=fx.length-1;i>=0;i--){
+    const p=fx[i];
+    p.life -= dt;
+    if(p.life<=0){ fx.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+  }
+
+  // 7) AI 计时
+  for(const owner of [2,3]){
+    aiTimers[owner]+=dt;
+    if(aiTimers[owner]>=CFG.aiTick){ aiTimers[owner]=0; aiStep(owner); }
+  }
+
+  // 8) 胜利判定
+  // 8a) 玩家阵亡 → 立即结算判负（不等两家 AI 打完；胜利者=存活势力中总容量最大者）
+  const owners = new Set();
+  for(const n of nodes){ if(n.owner!==0) owners.add(n.owner); }
+  if(owners.size && !owners.has(1)){
+    let winner=0, maxCap=-1;
+    for(const o of [2,3]){ if(owners.has(o) && ownerCap(o)>maxCap){ maxCap=ownerCap(o); winner=o; } }
+    endGame(winner, true); // 第二个参数 = 玩家失败（title 显示"你输了"）
+    return;
+  }
+  // 8b) 全场除中立外只剩一个势力
+  if(owners.size<=1){ endGame(owners.values().next().value||0); return; }
+}
+
+// ===================== 弹道 / 粒子 =====================
+// 可见弹道（箭矢）：从攻击者射向目标，命中结算伤害
+function makeShot(attacker, tgt, dmg, r){
+  return {
+    x: attacker.x, y: attacker.y,
+    tgt, dmg, owner: attacker.owner, r: Math.max(2, r*0.55),
+    dead:false
+  };
+}
+// 火花粒子：近战碰撞 / 命中 / 死亡时迸溅
+function spawnBurst(x, y, color){
+  if(fx.length > 400) fx.shift(); // 防爆内存
+  const n = 3 + Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2;
+    const sp = 40 + Math.random()*90;
+    fx.push({
+      x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+      life: 0.25 + Math.random()*0.25,
+      color, size: 1.5 + Math.random()*2
+    });
+  }
+}
+
+// 找射程 b.range 内最近的敌方行进球（弓箭手用；未出发的球还在村里，不打）
+function findEnemyBallInRange(b){
+  let best=null, bestD=Infinity;
+  for(const c of balls){
+    if(c.dead || !c.left || c.owner===b.owner) continue;
+    const dx=c.x-b.x, dy=c.y-b.y, d2=dx*dx+dy*dy;
+    const rr = b.range;
+    if(d2 <= rr*rr && d2 < bestD){ bestD=d2; best=c; }
+  }
+  return best;
+}
+// 找与 b 贴身接触的敌方球（近战阻挡用：碰上就停下、不穿过）
+// 接触阈值 = 两球半径之和（所有兵球半径均为 5，故 ≈ b.radius*2）
+function findEnemyBallInContact(b){
+  let best=null, bestD=Infinity;
+  const rr = b.radius*2, rr2=rr*rr;
+  for(const c of balls){
+    if(c.dead || !c.left || c.owner===b.owner) continue;
+    const dx=c.x-b.x, dy=c.y-b.y, d2=dx*dx+dy*dy;
+    if(d2 <= rr2 && d2 < bestD){ bestD=d2; best=c; }
+  }
+  return best;
+}
+
+// 找塔攻击范围内最近的敌方行进球（未出发的球还在村里，不打）
+function findEnemyBallNearNode(n, range){
+  range = range || CFG.units.tower.range;
+  let best=null, bestD=Infinity;
+  const r = range;
+  for(const c of balls){
+    if(c.dead || !c.left || c.owner===n.owner) continue;
+    const dx=c.x-n.x, dy=c.y-n.y, d2=dx*dx+dy*dy;
+    if(d2 <= r*r && d2 < bestD){ bestD=d2; best=c; }
+  }
+  return best;
+}
+
+// 一次攻击判定（调用方已保证冷却），冷却由调用处管理
+function attackBall(attacker, target){
+  if(attacker.atkCd <= 0){
+    target.hp -= attacker.atk;
+    attacker.atkCd = attacker.atkRate;
+    if(target.hp <= 0) target.dead = true;
+  }
+}
+
+// ===================== 渲染 =====================
+// 按多边形点列绘制路径（调用方自行 beginPath/closePath）
+function drawPath(poly){
+  if(!poly.length) return;
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for(let i=1;i<poly.length;i++) ctx.lineTo(poly[i].x, poly[i].y);
+  ctx.closePath();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+
+  // 0) 桌面背景：纸面纵向渐变（缓存） + 四周暗角，让岛屿"浮"在桌面上
+  const key = W+"|"+H;
+  if(key !== bgKey){
+    bgKey = key;
+    bgGrad = ctx.createLinearGradient(0,0,0,H);
+    bgGrad.addColorStop(0, "#f8f5ed");
+    bgGrad.addColorStop(1, "#e8e0cf");
+  }
+  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
+  const vg = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.35, W/2, H/2, Math.max(W,H)*0.75);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(80,70,50,0.10)");
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  // 震屏：只摇世界层，HUD 是 DOM 不受影响
+  ctx.save();
+  if(shake > 0){ const s = shake*22; ctx.translate(rand(-s,s), rand(-s,s)); }
+
+  // 1) 岛屿投影（柔和大阴影 → 岛屿浮起）+ 底色（沙色）+ 微弱纸面纹理
+  ctx.beginPath(); drawPath(ISLAND);
+  ctx.save();
+  ctx.shadowColor = "rgba(60,55,40,0.30)"; ctx.shadowBlur = 28; ctx.shadowOffsetY = 12;
+  ctx.fillStyle = "#e8dcc4"; ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); drawPath(ISLAND);
+  const grad = ctx.createRadialGradient(W*0.5, (G_TOP+H)*0.45, 50, W*0.5, (G_TOP+H)*0.5, Math.max(W,H));
+  grad.addColorStop(0, "#fbf3e3");
+  grad.addColorStop(1, "#ece1cd");
+  ctx.fillStyle = grad; ctx.fill();
+  // 岛屿上缘高光（受光面，强化"浮起"感）
+  ctx.beginPath(); drawPath(ISLAND);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.stroke();
+
+  // 2) 岛屿内"菌丝点阵"纹理：固定伪随机点（按 ISLAND 形状遮罩），只画一次/帧缓存易做
+  drawIslandGrain();
+
+  // 2.5) 漂浮孢子氛围：缓慢漂移的浅色微粒，让画面"活"起来（随 gameTime，暂停即静止）
+  drawSpores();
+
+  // 3) 地块填充（按所属势力着色 + 内缩副本 → 相邻格留缝、绝不重叠）
+  //    中立保持沙色；势力用"浅染色 + 实心描边"，辨识度大幅提升
+  for(const n of nodes){
+    const col=CFG.colors[n.owner];
+    ctx.beginPath(); drawPath(n.ipoly);
+    if(n.owner===0){
+      ctx.fillStyle = "#ede2cf";
+      ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = "#cabea3"; ctx.stroke();
+    } else {
+      // 浅染色：势力色 14% 不透明 + 实心描边（势力色 60% 不透明）
+      ctx.fillStyle = col+"22"; // ~13% alpha
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = col+"99"; ctx.stroke();
+    }
+  }
+
+  // 4) 岛屿整体描边（最外圈）
+  ctx.beginPath(); drawPath(ISLAND); ctx.lineWidth=3; ctx.strokeStyle="#a89c84"; ctx.stroke();
+
+  // 5) 地块中心的建筑（蘑菇 / 箭塔 / 弓箭手兵营）
+  for(const n of nodes) drawBuilding(n);
+
+  // 5.5) 满员呼吸提示：兵力到顶的已占领建筑发微光（提醒"该出兵了"）
+  for(const n of nodes){
+    if(n.owner===0 || n.pop < n.cap) continue;
+    const col=CFG.colors[n.owner];
+    const a = Math.round((0.16 + 0.12*Math.sin(gameTime*4 + n.x*0.1)) * 255);
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.rad*0.72, 0, Math.PI*2);
+    ctx.lineWidth=3; ctx.strokeStyle = col + a.toString(16).padStart(2,"0"); ctx.stroke();
+  }
+
+  // 5.6) 悬停高亮：指针落在自己节点上 → 呼吸光环 + 手型光标（提示"可派兵"）
+  if(hoverNode && hoverNode.owner===1 && running && !paused && !drag.from){
+    const n=hoverNode, col=CFG.colors[1];
+    const pulse = 1 + 0.05*Math.sin(gameTime*6);
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.rad*0.95*pulse, 0, Math.PI*2);
+    ctx.lineWidth=2.5; ctx.strokeStyle=col+"88"; ctx.stroke();
+  }
+
+  // 6) 飞行中的球（实体：血量条 + 兵种标记）
+  for(const b of balls) drawBall(b);
+
+  // 7) 弹道（箭矢）：远程攻击肉眼可见
+  drawShots();
+
+  // 8) 粒子（碰撞/命中/死亡火花）
+  drawFx();
+
+  // 9) 拖拽引导线（粗细随距离变） + 目标瞄准圈
+  if(drag.from){
+    drawDragGuide();
+  }
+  // 9.5) 集结拖动引导：与普通派兵同款反馈（引导线 + 目标瞄准圈 + 用途标签）
+  if(rallyDrag){
+    drawRallyGuide();
+  }
+
+  ctx.restore(); // 震屏 save/restore 收尾
+}
+
+// 弹道渲染：小箭矢（带方向头）
+function drawShots(){
+  for(const s of shots){
+    if(s.dead) continue;
+    const col=CFG.colors[s.owner];
+    const dx=s.tgt.x-s.x, dy=s.tgt.y-s.y;
+    const d=Math.hypot(dx,dy)||1;
+    const ux=dx/d, uy=dy/d;
+    // 箭身
+    ctx.beginPath();
+    ctx.moveTo(s.x-ux*(s.r*2.4), s.y-uy*(s.r*2.4));
+    ctx.lineTo(s.x+ux*(s.r*1.2), s.y+uy*(s.r*1.2));
+    ctx.lineWidth=s.r*0.9; ctx.strokeStyle=col; ctx.stroke();
+    // 箭头
+    ctx.beginPath();
+    ctx.moveTo(s.x+ux*(s.r*2.6), s.y+uy*(s.r*2.6));
+    ctx.lineTo(s.x+ux*(s.r*0.4)+uy*(s.r*1.4), s.y+uy*(s.r*0.4)-ux*(s.r*1.4));
+    ctx.lineTo(s.x+ux*(s.r*0.4)-uy*(s.r*1.4), s.y+uy*(s.r*0.4)+ux*(s.r*1.4));
+    ctx.closePath();
+    ctx.fillStyle=col; ctx.fill();
+  }
+}
+
+// 粒子渲染
+function drawFx(){
+  for(const p of fx){
+    ctx.globalAlpha = Math.max(0, p.life/0.3);
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle=p.color; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// 菌丝点阵纹理：在岛屿内撒上浅色小点 + 几条交叉弧线，作为"菌毯"氛围底纹
+// 缓存到 GRAIN 一次画完，性能友好；点位置用 mulberry32 种子锁死，不抖
+let GRAIN=[], GRAIN_KEY="", SPORES=[];
+const _grainRng = (()=>{ let s = 1234567; return ()=>{ s = (s+0x6D2B79F5)|0; let t = Math.imul(s ^ (s>>>15), 1|s); t = (t + Math.imul(t ^ (t>>>7), 61|t)) ^ t; return ((t ^ (t>>>14))>>>0) / 4294967296; }; })();
+function makeGrain(){
+  const key = W+"|"+H+"|"+ISLAND.length;
+  if(key === GRAIN_KEY) return;
+  GRAIN_KEY = key;
+  GRAIN=[]; SPORES=[];
+  const cx=W/2, cy=G_TOP+(H-G_TOP)/2;
+  const bb = { minX:cx, maxX:cx, minY:cy, maxY:cy };
+  for(const v of ISLAND){ if(v.x<bb.minX)bb.minX=v.x; if(v.x>bb.maxX)bb.maxX=v.x; if(v.y<bb.minY)bb.minY=v.y; if(v.y>bb.maxY)bb.maxY=v.y; }
+  // 浅色菌点
+  for(let i=0;i<160;i++){
+    const x = bb.minX + _grainRng()*(bb.maxX-bb.minX);
+    const y = bb.minY + _grainRng()*(bb.maxY-bb.minY);
+    if(!insidePoly({x,y},ISLAND)) continue;
+    GRAIN.push({x,y, r: 1+_grainRng()*1.6, hue: _grainRng()<0.5 ? 0 : 1});
+  }
+  // 漂浮孢子：位置种子锁死（不闪），运动轨迹由 gameTime 驱动
+  for(let i=0;i<22;i++){
+    const x = bb.minX + _grainRng()*(bb.maxX-bb.minX);
+    const y = bb.minY + _grainRng()*(bb.maxY-bb.minY);
+    if(!insidePoly({x,y},ISLAND)) continue;
+    SPORES.push({ x, y, r: 1.2+_grainRng()*1.8, ph: _grainRng()*6.28, sp: 0.4+_grainRng()*0.7, amp: 6+_grainRng()*10 });
+  }
+}
+// 漂浮孢子渲染：缓慢正弦漂移的微粒，纯氛围（不参与交互）
+function drawSpores(){
+  for(const s of SPORES){
+    const x = s.x + Math.sin(gameTime*s.sp + s.ph)*s.amp;
+    const y = s.y + Math.cos(gameTime*s.sp*0.7 + s.ph)*s.amp*0.5;
+    ctx.beginPath(); ctx.arc(x, y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,250,235,0.5)"; ctx.fill();
+  }
+}
+function drawIslandGrain(){
+  makeGrain();
+  for(const g of GRAIN){
+    ctx.beginPath(); ctx.arc(g.x,g.y,g.r,0,Math.PI*2);
+    // 微微冷暖差
+    ctx.fillStyle = g.hue ? "rgba(180,170,140,0.32)" : "rgba(255,243,220,0.55)";
+    ctx.fill();
+  }
+  // 几条柔和的内弧线，让画面有"菌丝走向"
+  ctx.lineWidth=1;
+  ctx.strokeStyle="rgba(160,150,120,0.18)";
+  const cx=W/2, cy=G_TOP+(H-G_TOP)/2;
+  for(let k=0;k<4;k++){
+    ctx.beginPath();
+    const r0 = 40 + k*55, dy = (k-1.5)*8;
+    for(let a=0;a<=Math.PI*2+0.1; a+=0.2){
+      const wob = Math.sin(a*3 + k)*4;
+      const r = r0 + wob;
+      const x = cx + Math.cos(a)*r, y = cy+dy + Math.sin(a)*r*0.65;
+      if(a===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+}
+
+// 拖拽引导：粗细随距离调整 + 兵数随拖拽浮动显示 + 目标节点处画瞄准圈
+function drawDragGuide(){
+  const from=drag.from;
+  if(!from) return;
+  const tgt = drag.to || null;
+  const pos = drag.pos;
+  const col = CFG.colors[from.owner];
+  const sendable = Math.max(0, (from.pop - (from.pending||0)) - 1); // 可派 = 当前兵 - 已承诺未出发 - 留守1
+  const d = dist(from, pos);
+  // 引导线（虚线 → 喷涌效果：在路径上铺浅色细线 + 终点连线）
+  ctx.lineCap="round";
+  // 背景线
+  ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(pos.x, pos.y);
+  ctx.strokeStyle = col+"44"; ctx.lineWidth = 6;
+  ctx.setLineDash([6,8]); ctx.stroke(); ctx.setLineDash([]);
+  // 主线
+  ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(pos.x, pos.y);
+  ctx.strokeStyle = col; ctx.lineWidth = 2.2;
+  ctx.setLineDash([8,6]); ctx.stroke(); ctx.setLineDash([]);
+  // 起点圈（青色脉络环）
+  ctx.beginPath(); ctx.arc(from.x, from.y, 14+Math.min(8,d*0.02), 0, Math.PI*2);
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+
+  // 兵力浮动标签 —— 跟随光标
+  ctx.font="bold 12px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const bw=44, bh=18, bx=pos.x, by=pos.y-18;
+  ctx.beginPath();
+  rrPath(ctx, bx-bw/2, by-bh/2, bw, bh, 6);
+  ctx.fillStyle = col; ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText("出兵 "+sendable, bx, by+0.5);
+  // 标签尾尖
+  ctx.beginPath();
+  ctx.moveTo(bx-5, by+bh/2); ctx.lineTo(bx+5, by+bh/2);
+  ctx.lineTo(bx, by+bh/2+4); ctx.closePath();
+  ctx.fillStyle=col; ctx.fill();
+
+  // 目标瞄准圈：松手会落在哪 → 在目标地块画双层瞄准圈
+  if(tgt){
+    const tcol = CFG.colors[tgt.owner];
+    ctx.beginPath(); ctx.arc(tgt.x, tgt.y, tgt.rad*0.85, 0, Math.PI*2);
+    ctx.strokeStyle = tcol; ctx.lineWidth = 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(tgt.x, tgt.y, tgt.rad*0.65, 0, Math.PI*2);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+    // 准星 4 角
+    const r = tgt.rad*0.95;
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    for(let k=0;k<4;k++){
+      const ang = (k/4)*Math.PI*2 + Math.PI/4;
+      const cx2 = tgt.x + Math.cos(ang)*r;
+      const cy2 = tgt.y + Math.sin(ang)*r;
+      ctx.beginPath(); ctx.moveTo(cx2-Math.cos(ang)*5, cy2-Math.sin(ang)*5);
+      ctx.lineTo(cx2+Math.cos(ang)*5, cy2+Math.sin(ang)*5);
+      ctx.stroke();
+    }
+    // 预计兵力提示
+    const req = Math.max(0, tgt.pop + 1 - sendable);
+    const tipTxt = sendable <= 0 ? "兵力不足" : (tgt.owner===from.owner ? `回村 +${sendable}` : (req<=0 ? "必胜" : `需 ${req} 兵`));
+    ctx.font="bold 11px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    const tw=Math.max(50, ctx.measureText(tipTxt).width+18), th=16;
+    const tx=tgt.x, ty=tgt.y - tgt.rad*1.1 - 18;
+    ctx.beginPath();
+    rrPath(ctx, tx-tw/2, ty-th/2, tw, th, 5);
+    ctx.fillStyle = (sendable<=0 || (tgt.owner!==from.owner && req>0)) ? "#e8654f" : "#2bb3a3";
+    ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.fillText(tipTxt, tx, ty+0.5);
+  }
+}
+
+// 集结拖动引导：与普通派兵一致的反馈（虚线引导线 + 目标双层瞄准圈 + 用途标签）
+// 视觉规则同 drawDragGuide：背景粗虚线 + 主线 + 目标圈，让"拖到哪=全军去哪"一眼看懂
+function drawRallyGuide(){
+  if(!rallyDrag || !rallyPos) return;
+  const col = CFG.colors[1]; // 玩家色
+  const t = rallyHover;
+  const ex = t ? t.x : rallyPos.x, ey = t ? t.y : rallyPos.y;
+  // 引导线（从按钮当前位置 → 悬停节点/指针）
+  ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(rallyPos.x, rallyPos.y); ctx.lineTo(ex, ey);
+  ctx.strokeStyle = col+"44"; ctx.lineWidth = 6; ctx.setLineDash([6,8]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(rallyPos.x, rallyPos.y); ctx.lineTo(ex, ey);
+  ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.setLineDash([8,6]); ctx.stroke(); ctx.setLineDash([]);
+  if(!t) return;
+  // 目标瞄准圈（同 drawDragGuide 的目标圈：外层虚线 + 内层实线）
+  const tcol = CFG.colors[t.owner];
+  ctx.beginPath(); ctx.arc(t.x, t.y, t.rad*0.85, 0, Math.PI*2);
+  ctx.strokeStyle = tcol; ctx.lineWidth = 2; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(t.x, t.y, t.rad*0.65, 0, Math.PI*2);
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+  // 用途标签：己方=回防 / 中立=抢点 / 敌方=总攻
+  const tag = t.owner===1 ? "集结 · 回防" : (t.owner===0 ? "集结 · 抢点" : "集结 · 总攻");
+  ctx.font="bold 12px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const tw = ctx.measureText(tag).width + 18, th = 18;
+  const tx = t.x, ty = t.y - t.rad*1.1 - 14;
+  ctx.beginPath(); rrPath(ctx, tx-tw/2, ty-th/2, tw, th, 5);
+  ctx.fillStyle = col; ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillText(tag, tx, ty+0.5);
+}
+
+// 建筑分派：village=蘑菇（原 drawMushroom） / tower=箭塔 / archery=弓箭手兵营
+function drawBuilding(n){
+  if(n.type==='tower') return drawTower(n);
+  if(n.type==='archery') return drawArchery(n);
+  drawMushroom(n);
+}
+
+// 箭塔：高塔造型 + 被占领时显示射程圈（淡虚线）
+function drawTower(n){
+  const col=CFG.colors[n.owner];
+  const x=n.x, y=n.y;
+  const r  = Math.max(13, Math.min(24, n.rad*0.6));   // 塔底半径
+  const pad = Math.max(13, Math.min(22, n.rad*0.55));
+  // 射程圈（被占领时；玩家吃科技形态射程，与射击逻辑一致）
+  if(n.owner!==0){
+    const ts = towerStats(n);
+    ctx.beginPath(); ctx.arc(x, y, ts.range, 0, Math.PI*2);
+    ctx.setLineDash([3,5]);
+    ctx.lineWidth=1; ctx.strokeStyle = col+"33"; ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // 接地阴影
+  ctx.beginPath(); ctx.ellipse(x, y+r*0.5, pad, pad*0.40, 0, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(60,55,40,${n.owner===0?0.18:0.28})`;
+  ctx.fill();
+  // 塔基（矩形）
+  const bw=r*1.5, bh=r*0.8;
+  ctx.fillStyle = n.owner===0 ? "#b8b3a3" : col;
+  ctx.fillRect(x-bw/2, y+bh*0.1, bw, bh);
+  // 塔身（收窄梯形）
+  ctx.beginPath();
+  ctx.moveTo(x-bw*0.36, y+bh*0.1);
+  ctx.lineTo(x-bw*0.24, y-bh*0.9);
+  ctx.lineTo(x+bw*0.24, y-bh*0.9);
+  ctx.lineTo(x+bw*0.36, y+bh*0.1);
+  ctx.closePath();
+  ctx.fillStyle = n.owner===0 ? "#c9c2ae" : shadeColor(col, 0.25);
+  ctx.fill();
+  ctx.lineWidth=1.4;
+  ctx.strokeStyle = n.owner===0 ? "#9a937f" : shadeColor(col, 0.5);
+  ctx.stroke();
+  // 塔顶垛口（城齿 ×3）：一眼看出"这是堡垒"
+  const teethTop = y - bh*0.95, toothH = bh*0.30, toothW = bw*0.20;
+  ctx.fillStyle = n.owner===0 ? "#9a937f" : shadeColor(col, 0.35);
+  for(let k=-1;k<=1;k++){
+    ctx.fillRect(x + k*toothW*1.05 - toothW/2, teethTop - toothH, toothW, toothH);
+  }
+  // 占领旗帜：旗杆从中央垛口伸出，塔顶三角旗随风摆动（中立时不挂旗）
+  if(n.owner!==0){
+    const wave = Math.sin(gameTime*5 + x*0.1)*2;
+    ctx.strokeStyle = shadeColor(col,0.3); ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(x, teethTop - toothH); ctx.lineTo(x, teethTop - toothH - bh*0.35); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, teethTop - toothH - bh*0.35);
+    ctx.lineTo(x+bw*0.42+wave, teethTop - toothH - bh*0.35 + bh*0.14);
+    ctx.lineTo(x, teethTop - toothH - bh*0.35 + bh*0.28);
+    ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  }
+  // 窗口（箭垛）
+  ctx.fillStyle = n.owner===0 ? "#ffffffaa" : "#ffffffcc";
+  ctx.fillRect(x-3, y-bh*0.55, 6, 6);
+  // 通用徽章与特效
+  drawBuildingFX(n, y+bh*0.1);
+}
+
+// 弓箭手兵营：帐篷造型（与蘑菇村庄、石塔堡垒完全区分；面上白色弓徽章）
+function drawArchery(n){
+  const col=CFG.colors[n.owner];
+  const x=n.x, y=n.y;
+  const r  = Math.max(11, Math.min(22, n.rad*0.55));
+  const pad = Math.max(13, Math.min(22, n.rad*0.55));
+  const w = r*1.5, h = r*1.15;              // 帐篷宽 / 高
+  const baseY = y + r*0.15, topY = baseY - h;
+  // 接地阴影
+  ctx.beginPath(); ctx.ellipse(x, y+r*0.45, pad, pad*0.40, 0, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(60,55,40,${n.owner===0?0.18:0.28})`;
+  ctx.fill();
+  // 帐篷主体（等腰三角）
+  ctx.beginPath();
+  ctx.moveTo(x - w/2, baseY);
+  ctx.lineTo(x, topY - 2);
+  ctx.lineTo(x + w/2, baseY);
+  ctx.closePath();
+  ctx.fillStyle = n.owner===0 ? "#b8b3a3" : col;
+  ctx.fill();
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = n.owner===0 ? "#9a937f" : shadeColor(col, 0.5);
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  // 帐篷前帘（门口下坠三角，深一档 → 有"开口"感）
+  ctx.beginPath();
+  ctx.moveTo(x - w*0.16, baseY);
+  ctx.lineTo(x, topY + h*0.35);
+  ctx.lineTo(x + w*0.16, baseY);
+  ctx.closePath();
+  ctx.fillStyle = n.owner===0 ? "#a39b89" : shadeColor(col, 0.55);
+  ctx.fill();
+  // 弓徽章（帐篷面上白色弯弓 + 弦，朝上）
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  ctx.lineWidth = 1.8;
+  const bowY = topY + h*0.60, bowR = r*0.28;
+  ctx.beginPath(); ctx.arc(x, bowY, bowR, -Math.PI*0.52, Math.PI*0.52); ctx.stroke();
+  const chordX = bowR*Math.cos(Math.PI*0.52);
+  ctx.beginPath();
+  ctx.moveTo(x-chordX, bowY - bowR*Math.sin(Math.PI*0.52));
+  ctx.lineTo(x+chordX, bowY - bowR*Math.sin(Math.PI*0.52));
+  ctx.stroke();
+  ctx.restore();
+  // 通用徽章与特效
+  drawBuildingFX(n, baseY + 1);
+}
+
+// 建筑通用：兵力徽章 + 被攻击闪光 + 占领爆点
+function drawBuildingFX(n, badgeY){
+  const col=CFG.colors[n.owner];
+  const x=n.x, y=n.y;
+  const pad = Math.max(13, Math.min(22, n.rad*0.55));
+  // 兵力徽章：白底+势力色边框+势力色数字
+  const bw = Math.max(18, Math.min(28, n.rad*0.8));
+  const bh = 14;
+  const bx = x, by = badgeY + 1;
+  ctx.beginPath();
+  ctx.moveTo(bx-bw/2+3, by-bh/2);
+  ctx.lineTo(bx+bw/2-3, by-bh/2);
+  ctx.quadraticCurveTo(bx+bw/2, by-bh/2, bx+bw/2, by-bh/2+3);
+  ctx.lineTo(bx+bw/2, by+bh/2-3);
+  ctx.quadraticCurveTo(bx+bw/2, by+bh/2, bx+bw/2-3, by+bh/2);
+  ctx.lineTo(bx-bw/2+3, by+bh/2);
+  ctx.quadraticCurveTo(bx-bw/2, by+bh/2, bx-bw/2, by+bh/2-3);
+  ctx.lineTo(bx-bw/2, by-bh/2+3);
+  ctx.quadraticCurveTo(bx-bw/2, by-bh/2, bx-bw/2+3, by-bh/2);
+  ctx.closePath();
+  ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = col; ctx.stroke();
+  ctx.font = "bold 12px system-ui";
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle = col;
+  ctx.fillText(String(n.pop), bx, by+0.5);
+  // 被攻击闪光
+  if(n.flash > 0){
+    const k = 1 - n.flash/0.3;
+    const rr = pad*0.7 + k*16;
+    ctx.beginPath(); ctx.arc(x, y+pad*0.3, rr, 0, Math.PI*2);
+    ctx.lineWidth = 2; ctx.strokeStyle = col+"aa"; ctx.stroke();
+    for(let s=0; s<3; s++){
+      const ang = (s/3)*Math.PI*2 + k*Math.PI;
+      const sp = pad*0.4 + k*22;
+      ctx.beginPath(); ctx.arc(x+Math.cos(ang)*sp, y+pad*0.2+Math.sin(ang)*sp*0.6, 1.6, 0, Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+    }
+  }
+  // 占领爆点
+  if(n.conquer > 0){
+    const t = 1 - n.conquer/0.85;
+    const eT = 1 - (1-t)*(1-t);
+    const baseR = n.rad * 0.8;
+    const rr = baseR + eT * (n.rad*1.6);
+    ctx.beginPath(); ctx.arc(x, y+pad*0.25, rr, 0, Math.PI*2);
+    ctx.lineWidth = 3*(1-eT) + 0.5;
+    ctx.strokeStyle = col; ctx.stroke();
+    for(let s=0; s<10; s++){
+      const ang = (s/10)*Math.PI*2;
+      const inner = baseR + eT*(n.rad*0.6);
+      const outer = inner + eT*(n.rad*0.5);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(ang)*inner, y+pad*0.25 + Math.sin(ang)*inner);
+      ctx.lineTo(x + Math.cos(ang)*outer, y+pad*0.25 + Math.sin(ang)*outer);
+      ctx.lineWidth = 1.5*(1-eT)+0.4;
+      ctx.strokeStyle = col;
+      ctx.stroke();
+    }
+  }
+}
+
+// 绘制地块中心（质心）的蘑菇建筑（不再用矩形城堡）+ 兵力徽章 + 状态特效
+// 主题一致：仿照蘑菇战争风格 —— 圆伞+菌柄+伞点
+function drawMushroom(n){
+  const col=CFG.colors[n.owner];
+  const x=n.x, y=n.y;
+
+  // 几何尺寸：随地块大小缩放，保证居中、不溢出
+  const r  = Math.max(11, Math.min(22, n.rad*0.55));   // 伞半径
+  const sh = r*1.05;                                  // 伞高（半椭圆）
+  const stH = r*0.55;                                 // 菌柄高度
+  const stW = r*0.28;                                 // 菌柄宽度
+  const pad = Math.max(13, Math.min(22, n.rad*0.55));  // 接地阴影圆半径
+
+  // 0) 接地阴影：让蘑菇看起来稳稳坐在地上
+  ctx.beginPath(); ctx.ellipse(x, y+stH*0.55, pad, pad*0.40, 0, 0, Math.PI*2);
+  const shadeAlpha = n.owner===0 ? 0.18 : 0.28;
+  ctx.fillStyle = `rgba(60,55,40,${shadeAlpha})`;
+  ctx.fill();
+
+  // 1) 菌柄（中立=灰，玩家=浅奶白，AI=更深的饱和色提亮对比）
+  const stemCol = n.owner===0 ? "#cfc8b8" : (n.owner===1 ? "#fbf5e8" : (n.owner===2 ? "#fdece5" : "#fcf0d8"));
+  ctx.fillStyle = stemCol;
+  ctx.strokeStyle = n.owner===0 ? "#a39b89" : col+"66";
+  ctx.lineWidth = 1.2;
+  // 圆角菌柄（用 rect 即可，简单稳健）
+  const sx = x - stW/2, sy = y - stH*0.05, ex = x + stW/2, ey = y + stH*0.55;
+  ctx.beginPath();
+  ctx.moveTo(sx+1.5, sy); ctx.lineTo(ex-1.5, sy);
+  ctx.quadraticCurveTo(ex, sy, ex, sy+1.5);
+  ctx.lineTo(ex, ey-2);
+  ctx.quadraticCurveTo(ex, ey, ex-2, ey);
+  ctx.lineTo(sx+2, ey);
+  ctx.quadraticCurveTo(sx, ey, sx, ey-2);
+  ctx.lineTo(sx, sy+1.5);
+  ctx.quadraticCurveTo(sx, sy, sx+1.5, sy);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // 2) 伞盖底色（半椭圆）
+  const capCol = n.owner===0 ? "#b8b3a3" : col;
+  ctx.beginPath();
+  ctx.ellipse(x, y - stH*0.05, r, sh, 0, Math.PI, Math.PI*2);
+  ctx.closePath();
+  ctx.fillStyle = capCol; ctx.fill();
+  // 伞盖描边（让玩家势力更鲜明）
+  ctx.lineWidth = n.owner===0 ? 1.2 : 1.8;
+  ctx.strokeStyle = n.owner===0 ? "#9a937f" : shadeColor(col, 0.5);
+  ctx.stroke();
+
+  // 3) 伞点装饰（蘑菇典型特征）：在伞盖范围内随机 3-4 个小白点（用稳定伪随机让每块地不变）
+  if(r >= 14){
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    const seed = (n.x*7 + n.y*13)|0;
+    for(let k=0;k<3;k++){
+      const a = (((seed*(k+1)*37) % 360) / 360) * Math.PI*2;
+      const rr = r*0.55;
+      const px = x + Math.cos(a)*rr;
+      const py = y - stH*0.05 - Math.sin(a)*rr*0.85;
+      const dotR = (r*0.10) * (0.8 + ((seed*(k+5))%100)/300);
+      ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // 4) 玩家与 AI 蘑菇的细微差异：玩家伞略大、轮廓更亮，AI 略小、有"敌人"阴影
+  if(n.owner===1){ // 玩家：伞下加一道高光弧
+    ctx.beginPath();
+    ctx.ellipse(x - r*0.20, y - stH*0.05 - sh*0.50, r*0.50, sh*0.18, 0, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fill();
+  }
+
+  // 5) 兵力徽章：菌柄底部的小圆药丸，白底+势力色边框+势力色数字
+  const bw = Math.max(18, Math.min(28, n.rad*0.8));
+  const bh = 14;
+  const bx = x, by = y + stH*0.55 + 1;
+  ctx.beginPath();
+  ctx.moveTo(bx-bw/2+3, by-bh/2);
+  ctx.lineTo(bx+bw/2-3, by-bh/2);
+  ctx.quadraticCurveTo(bx+bw/2, by-bh/2, bx+bw/2, by-bh/2+3);
+  ctx.lineTo(bx+bw/2, by+bh/2-3);
+  ctx.quadraticCurveTo(bx+bw/2, by+bh/2, bx+bw/2-3, by+bh/2);
+  ctx.lineTo(bx-bw/2+3, by+bh/2);
+  ctx.quadraticCurveTo(bx-bw/2, by+bh/2, bx-bw/2, by+bh/2-3);
+  ctx.lineTo(bx-bw/2, by-bh/2+3);
+  ctx.quadraticCurveTo(bx-bw/2, by-bh/2, bx-bw/2+3, by-bh/2);
+  ctx.closePath();
+  ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = col; ctx.stroke();
+  ctx.font = "bold 12px system-ui";
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle = col;
+  ctx.fillText(String(n.pop), bx, by+0.5);
+
+  // 6) 被攻击闪光：扩散环 + 小火花（基于 n.flash）
+  if(n.flash > 0){
+    const k = 1 - n.flash/0.3;
+    const rr = pad*0.7 + k*16;
+    ctx.beginPath(); ctx.arc(x, y+stH*0.25, rr, 0, Math.PI*2);
+    ctx.lineWidth = 2; ctx.strokeStyle = col+"aa"; ctx.stroke();
+    // 火花（3 个小球向外）
+    for(let s=0; s<3; s++){
+      const ang = (s/3)*Math.PI*2 + k*Math.PI;
+      const sp = pad*0.4 + k*22;
+      const fx = x + Math.cos(ang)*sp;
+      const fy = y + stH*0.20 + Math.sin(ang)*sp*0.6;
+      ctx.beginPath(); ctx.arc(fx, fy, 1.6, 0, Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+    }
+  }
+
+  // 7) 占领瞬间的"菌毯扩散"爆点：大幅扩散环 + 一圈粒子向外辐射
+  if(n.conquer > 0){
+    const t = 1 - n.conquer/0.85;          // 0 → 1（从翻色瞬间扩散到结束）
+    const eT = 1 - (1-t)*(1-t);            // ease-out
+    const baseR = n.rad * 0.8;
+    const rr = baseR + eT * (n.rad*1.6);
+    ctx.beginPath(); ctx.arc(x, y+stH*0.25, rr, 0, Math.PI*2);
+    ctx.lineWidth = 3*(1-eT) + 0.5;
+    ctx.strokeStyle = col; ctx.stroke();
+    // 一圈短光线
+    for(let s=0; s<10; s++){
+      const ang = (s/10)*Math.PI*2;
+      const inner = baseR + eT*(n.rad*0.6);
+      const outer = inner + eT*(n.rad*0.5);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(ang)*inner, y+stH*0.25 + Math.sin(ang)*inner);
+      ctx.lineTo(x + Math.cos(ang)*outer, y+stH*0.25 + Math.sin(ang)*outer);
+      ctx.lineWidth = 1.5*(1-eT)+0.4;
+      ctx.strokeStyle = col;
+      ctx.stroke();
+    }
+  }
+}
+
+// 颜色加深/变暗：formatColor 为 7 位 "#rrggbb"
+function shadeColor(hex, t){
+  const c = hex.replace("#","");
+  const r = parseInt(c.substr(0,2),16);
+  const g = parseInt(c.substr(2,2),16);
+  const b = parseInt(c.substr(4,2),16);
+  const nr = Math.round(r*(1-t));
+  const ng = Math.round(g*(1-t));
+  const nb = Math.round(b*(1-t));
+  return "#"+((1<<24) | (nr<<16) | (ng<<8) | nb).toString(16).slice(1);
+}
+
+// 飞行中的球（每颗球 = 1 个兵）：颜色按势力，弓箭手画小箭头标记，顶部血量条
+function drawBall(b){
+  if(!b.left) return; // 还没从村里走出，不画（建筑数字已实时体现）
+  const col=CFG.colors[b.owner];
+  const r = b.radius;
+
+  // 运动拖尾：行进中的球朝来向拉一条渐隐尾巴，强化速度感（站桩射击时不画）
+  if(!b.stopped){
+    const ux = b.to.x-b.from.x, uy = b.to.y-b.from.y;
+    const ud = Math.hypot(ux,uy)||1;
+    ctx.beginPath();
+    ctx.moveTo(b.x - ux/ud*r*2.2, b.y - uy/ud*r*2.2);
+    ctx.lineTo(b.x, b.y);
+    ctx.lineWidth = r*1.1; ctx.lineCap="round"; ctx.strokeStyle = col+"55"; ctx.stroke();
+  }
+
+  // 出生缩放：从村口"弹"出来（0.18s 内从 55% 放大到 100%）
+  const scale = b.popIn > 0 ? 1 - 0.45*(b.popIn/0.18) : 1;
+  const rd = r*scale;
+
+  // 弓箭手锁定线：停下是因为在射击这个目标 → 画虚线瞄准线 + 目标锁定环
+  if(b.stopped && b.lockTgt && !b.lockTgt.dead){
+    const t=b.lockTgt;
+    ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(t.x,t.y);
+    ctx.lineWidth=1; ctx.strokeStyle=col+"88"; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+    // 目标锁定环（呼吸动画：随时间微微缩放）
+    const pulse = 0.7 + 0.3*Math.sin(performance.now()/180);
+    ctx.beginPath(); ctx.arc(t.x,t.y,(t.radius+3)*pulse,0,Math.PI*2);
+    ctx.lineWidth=1.5; ctx.strokeStyle=col+"cc"; ctx.stroke();
+    // 十字准星
+    ctx.beginPath();
+    ctx.moveTo(t.x-8,t.y); ctx.lineTo(t.x-3,t.y);
+    ctx.moveTo(t.x+3,t.y); ctx.lineTo(t.x+8,t.y);
+    ctx.moveTo(t.x,t.y-8); ctx.lineTo(t.x,t.y-3);
+    ctx.moveTo(t.x,t.y+3); ctx.lineTo(t.x,t.y+8);
+    ctx.strokeStyle=col+"cc"; ctx.lineWidth=1.5; ctx.stroke();
+  }
+
+  // 血量条（满血时不画，省视觉噪音）
+  if(b.hp < b.hpMax){
+    const w = r*2.4, h=2.6;
+    const bx = b.x - w/2, by = b.y - r - 5;
+    ctx.fillStyle = "rgba(0,0,0,.25)";
+    ctx.fillRect(bx, by, w, h);
+    ctx.fillStyle = b.hp>0 ? col : "#c0392b";
+    ctx.fillRect(bx, by, w*Math.max(0,b.hp/b.hpMax), h);
+  }
+  // 球体
+  ctx.beginPath(); ctx.arc(b.x, b.y, rd, 0, Math.PI*2);
+  ctx.fillStyle = col; ctx.fill();
+  // 高光
+  ctx.beginPath(); ctx.arc(b.x-rd*0.25, b.y-rd*0.25, rd*0.32, 0, Math.PI*2);
+  ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fill();
+  // 碰撞白闪：刚被攻击/碰撞的一瞬间闪白圈
+  if(b.collideFlash > 0){
+    ctx.beginPath(); ctx.arc(b.x, b.y, rd+2.5, 0, Math.PI*2);
+    ctx.lineWidth=2; ctx.strokeStyle="rgba(255,255,255,0.9)"; ctx.stroke();
+  }
+  // 弓箭手标记：白描边 + 箭矢（箭杆/箭头/尾羽，朝目标方向）→ 与步兵圆球一眼区分
+  if(b.cls==='archer'){
+    const ang = Math.atan2(b.to.y-b.y, b.to.x-b.x);
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(ang);
+    // 球体白色描边（弓手常驻特征，步兵没有）
+    ctx.beginPath(); ctx.arc(0, 0, rd+1.3, 0, Math.PI*2);
+    ctx.lineWidth = 1.4; ctx.strokeStyle = "rgba(255,255,255,0.92)"; ctx.stroke();
+    // 箭杆
+    ctx.beginPath(); ctx.moveTo(r+6.5, 0); ctx.lineTo(r-4, 0);
+    ctx.lineWidth = 1.6; ctx.strokeStyle = "#fff"; ctx.stroke();
+    // 箭头（实心三角）
+    ctx.beginPath(); ctx.moveTo(r+6.5, 0); ctx.lineTo(r+1.5, -3); ctx.lineTo(r+1.5, 3);
+    ctx.closePath(); ctx.fillStyle = "#fff"; ctx.fill();
+    // 尾羽（两撇）
+    ctx.beginPath();
+    ctx.moveTo(r-4, 0); ctx.lineTo(r-8, -3);
+    ctx.moveTo(r-4, 0); ctx.lineTo(r-8, 3);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// 圆角矩形路径辅助
+function rrPath(c, x, y, w, h, r){
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y);
+  c.closePath();
+}
+
+function loop(ts){
+  if(!running) return;
+  const dt = Math.min(0.05, (ts-lastTs)/1000 || 0); lastTs=ts;
+  if(!paused){
+    update(dt);
+    gameTime += dt;
+  }
+  draw(); updateHUD();
+  requestAnimationFrame(loop);
+}
+
+// ===================== HUD =====================
+function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return m+":"+String(ss).padStart(2,"0"); }
+const _hudEl = {
+  p:{ fill:document.getElementById("pFill"), pct:document.getElementById("pPct"), camp:document.querySelector("#hud .camp.player") },
+  a1:{ fill:document.getElementById("a1Fill"), pct:document.getElementById("a1Pct"), camp:document.querySelector("#hud .camp.red") },
+  a2:{ fill:document.getElementById("a2Fill"), pct:document.getElementById("a2Pct"), camp:document.querySelector("#hud .camp.amber") }
+};
+function updateHUD(){
+  const tc=totalCap()||1;
+  const map=[ [1,"p"], [2,"a1"], [3,"a2"] ];
+  let maxK="p", maxV=-1;
+  for(const [o,k] of map){
+    const v = Math.round(ownerCap(o)/tc*100);
+    _hudEl[k].pct.textContent = v+"%";
+    _hudEl[k].fill.style.width = v+"%";
+    if(v > maxV){ maxV=v; maxK=k; }
+  }
+  // 领先方高亮：进度条发光 + 百分比后带 👑
+  for(const [,k] of map) _hudEl[k].camp.classList.toggle("leader", k===maxK && maxV>0);
+  document.getElementById("time").textContent = fmtTime(gameTime);
+}
+
+// ===================== 输入（鼠标 + 触控统一用 Pointer 事件） =====================
+const drag={from:null,to:null,pos:{x:0,y:0}};
+function nodeAt(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; if(insidePoly({x,y}, n.poly)) return n; } return null; }
+// 命中容错（V11 移动端）：严格点在格内没命中时，找 10px 内最近的节点（小屏手指点选更宽松）
+function nodeAtNear(x,y,rad){
+  const n0 = nodeAt(x,y);
+  if(n0) return n0;
+  const rr = (rad||10), rr2 = rr*rr;
+  let best=null, bestD=Infinity;
+  for(const n of nodes){
+    const dx=n.x-x, dy=n.y-y, d2=dx*dx+dy*dy;
+    if(d2 <= rr2 && d2 < bestD){ bestD=d2; best=n; }
+  }
+  return best;
+}
+function getPos(e){ const r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+
+cv.addEventListener("pointerdown", e=>{
+  if(!running || paused) return;
+  Sfx.init(); // 用户手势：初始化音频
+  const p=getPos(e); const n=nodeAtNear(p.x,p.y,12);
+  if(n && n.owner===1){ drag.from=n; drag.pos=p; drag.to=null; }
+});
+cv.addEventListener("pointermove", e=>{
+  const p=getPos(e);
+  if(drag.from){ drag.pos=p; drag.to=nodeAtNear(drag.pos.x,drag.pos.y,12); return; }
+  // 非拖拽时：追踪悬停节点，落在自己节点上显示手型光标
+  hoverNode = (running && !paused) ? nodeAt(p.x,p.y) : null;
+  cv.style.cursor = (hoverNode && hoverNode.owner===1) ? "pointer" : "default";
+});
+function endDrag(e){
+  if(!drag.from) return;
+  const p=getPos(e);
+  // 防误触（V11）：位移 < 10px 视为"点了一下"，不派兵（避免手指抖动误操作）
+  if(dist(drag.from, p) < 10){ drag.from=null; drag.to=null; return; }
+  const t=nodeAtNear(p.x,p.y,12);
+  if(t) send(drag.from, t);
+  drag.from=null; drag.to=null;
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", ()=>{ drag.from=null; drag.to=null; });
+// 长按不弹系统菜单 / 不触发文本选择（移动端细节）
+cv.addEventListener("contextmenu", e=>e.preventDefault());
+
+// ===================== 全体集结（⚑ 按钮拖到建筑 → 所有友方节点派兵过去） =====================
+function rallyTo(t){
+  if(!t || !running) return 0;
+  let sent=0;
+  for(const n of nodes){
+    if(n.owner===1 && n!==t && (n.pop-(n.pending||0))>1){ send(n, t); sent++; }
+  }
+  if(sent>0) Sfx.play("conquer"); // 集结号（上扬音提示"收到"）
+  return sent;
+}
+const rallyBtn = document.getElementById("rallyBtn");
+const rallyHint = document.getElementById("rallyHint");
+let rallyDrag = false, rallyPos = null, rallyHover = null; // 集结拖动状态：指针位置(画布坐标) + 悬停目标
+rallyBtn.addEventListener("pointerdown", e=>{
+  if(!running || paused) return;
+  e.preventDefault();
+  Sfx.init(); Sfx.play("ui");
+  try{ rallyBtn.setPointerCapture(e.pointerId); }catch(err){}
+  rallyDrag = true;
+  rallyPos = getPos(e); rallyHover = nodeAtNear(rallyPos.x, rallyPos.y, 18);
+  rallyBtn.classList.add("rallying");
+  rallyHint.style.display = "block";
+  rallyBtn.style.left=(e.clientX-rallyBtn.offsetWidth/2)+"px"; rallyBtn.style.top=(e.clientY-rallyBtn.offsetHeight/2)+"px";
+});
+rallyBtn.addEventListener("pointermove", e=>{
+  if(!rallyDrag) return;
+  rallyBtn.style.left=(e.clientX-rallyBtn.offsetWidth/2)+"px";
+  rallyBtn.style.top=(e.clientY-rallyBtn.offsetHeight/2)+"px";
+  rallyPos = getPos(e); rallyHover = nodeAtNear(rallyPos.x, rallyPos.y, 18); // 供画布引导线/瞄准圈使用
+});
+function rallyEnd(e){
+  if(!rallyDrag) return;
+  rallyDrag = false; rallyPos = null; rallyHover = null;
+  rallyBtn.classList.remove("rallying");
+  rallyHint.style.display = "none";
+  // 复位：回到右下角悬浮原位（CSS bottom/right 定位）
+  rallyBtn.style.left=""; rallyBtn.style.top="";
+  if(running && !paused){
+    const t = nodeAtNear(getPos(e).x, getPos(e).y, 18);
+    if(t) rallyTo(t);
+  }
+}
+rallyBtn.addEventListener("pointerup", rallyEnd);
+rallyBtn.addEventListener("pointercancel", rallyEnd);
+
+// ===================== 开始 / 结束 =====================
+function start(){
+  // HUD 阵营名同步（开局选阵营后写入 factionOf）
+  document.getElementById("pName").textContent = CFG.factions[factionOf[1]].name;
+  document.getElementById("a1Name").textContent = CFG.factions[factionOf[2]].name;
+  document.getElementById("a2Name").textContent = CFG.factions[factionOf[3]].name;
+  document.getElementById("diffChip").textContent = getDiff();
+  buildMap(); running=true; paused=false; gameTime=0; startTime=performance.now(); lastTs=performance.now();
+  document.getElementById("banner").style.display="none";
+  document.getElementById("diffSelect").style.display="none";
+  requestAnimationFrame(loop);
+}
+function endGame(owner, playerLost){
+  running=false;
+  const b=document.getElementById("banner");
+  const title = document.getElementById("bannerTitle");
+  const sub = document.getElementById("bannerSub");
+  const icon = document.getElementById("bannerIcon");
+  const NAME={1:CFG.factions[factionOf[1]].name, 2:CFG.factions[factionOf[2]].name, 3:CFG.factions[factionOf[3]].name};
+  if(owner===1){
+    title.textContent = NAME[1]+"赢了"; title.className = "win";
+    icon.textContent = "🍄";
+    // 胜利奖励：+5 金币；若当前难度已是最高已解锁难度，解锁下一档
+    const prog = getProg();
+    prog.gold += 5;
+    saveProg(prog);
+    const diff = getDiff(), unlk = getUnlocked();
+    let extra = "整座岛只剩"+NAME[1]+"的菌毯，+"+"5 金币已入账（难度 "+diff+"）。";
+    if(diff === unlk && diff < 15){
+      saveUnlocked(diff+1);
+      extra = "整座岛只剩"+NAME[1]+"的菌毯。+"+"5 金币已入账，并解锁了难度 "+(diff+1)+"！";
+    }
+    sub.textContent = extra;
+    Sfx.play("win");
+  } else if(owner===0){
+    title.textContent = "僵局"; title.className = "lose";
+    sub.textContent = "三家都没能吞掉对方——再来一局破僵。";
+    icon.textContent = "⚖️";
+    Sfx.play("lose");
+  } else {
+    if(playerLost){
+      // 玩家阵亡：直接判负，明确说"你输了"（胜利者=还活着且占得最多的 AI，可能另有 AI 残存）
+      title.textContent = "你输了"; title.className = "lose";
+      sub.textContent = "你的"+NAME[1]+"菌毯被"+NAME[owner]+"盖住了——先升级，再来报仇。";
+      icon.textContent = "💀";
+    } else {
+      title.textContent = NAME[owner]+"赢了"; title.className = "lose";
+      sub.textContent = "你的"+NAME[1]+"菌毯被"+NAME[owner]+"盖住了，再来一把反攻。";
+      icon.textContent = owner===2 ? "🟥" : "🟨";
+    }
+    Sfx.play("lose");
+  }
+  b.style.display="flex";
+}
+
+// ===================== 难度选择（15 档解锁制） =====================
+const DIFF_NAMES = ["新芽","幼苗","草丛","灌木","小树","树林","密林","树妖","古树","丛林霸主","菌王","孢子暴君","菌毯巨兽","蘑菇神","蘑菇大帝"];
+function buildDiffGrid(){
+  const grid = document.getElementById("dsGrid");
+  grid.innerHTML = "";
+  const diff = getDiff(), unlk = getUnlocked();
+  for(let d=1; d<=15; d++){
+    const btn = document.createElement("button");
+    btn.className = "ds-item" + (d===diff ? " sel" : "") + (d>unlk ? " locked" : "");
+    const pct = diffPct(d);
+    btn.innerHTML = `<span class="ds-n">${d>unlk ? "🔒" : d}</span><span class="ds-b">${d>unlk ? "未解锁" : DIFF_NAMES[d-1]+" +"+pct+"%"}</span>`;
+    if(d <= unlk) btn.onclick = ()=>{ saveDiff(d); showFactionSelect(); };
+    grid.appendChild(btn);
+  }
+  document.getElementById("dsCur").textContent = "难度 "+diff+"（"+DIFF_NAMES[diff-1]+" +"+diffPct(diff)+"% 强化）";
+  document.getElementById("dsUnlocked").textContent = "难度 "+unlk;
+}
+function showDiffSelect(){
+  // 从游戏内"重开"进入：先冻结旧局（否则旧局还在背后跑，遮罩盖着也会继续战斗/出胜负）
+  running = false;
+  paused = false;
+  document.getElementById("pauseBtn").textContent = "暂停";
+  document.getElementById("pauseOverlay").style.display = "none";
+  document.getElementById("banner").style.display = "none";
+  document.getElementById("startScreen").style.display = "none";
+  buildDiffGrid();
+  document.getElementById("diffSelect").style.display = "flex";
+  document.getElementById("factionSelect").style.display = "none";
+  document.getElementById("upgradeScreen").style.display = "none";
+}
+
+// ===================== 局外养成：提升树 + 队伍配置 =====================
+// 三条线：A 兵营（单兵全局）/ B 工坊（产能）/ C 科技（兵种形态，可切换）
+const UG_MAX = { hp:8, atk:8, spd:8, move:8, prod:8, cap:8, start:8 }; // 每个分支最多提升 8 次（黎总要求）
+function ugBtn(key, name, status, effect, canUp){
+  const goldOk = getProg().gold >= 3;
+  const cls = !canUp ? "max" : (goldOk ? "can" : "");
+  return `<button class="ug-btn ${cls}" onclick="buyUpgrade('${key}')">
+    <span class="ug-t">${name} · ${status}</span>
+    <span class="ug-s">${effect} · ${canUp ? (goldOk ? "花费 3 🪙" : "金币不足") : "已满级"}</span>
+  </button>`;
+}
+function modGroup(cls, label, maxLv, cur){
+  const mods = UNIT_MODS[cls];
+  let s = "";
+  for(let i=0;i<mods.length;i++){
+    const m = mods[i];
+    if(i <= maxLv){
+      s += `<button class="ug-btn mode ${cur===i?"on":"off"}" onclick="pickMod('${cls}',${i})">
+        <span class="ug-t">${i===0?"✓":""}${m.name}</span><span class="ug-s">${m.tag} · ${m.desc}</span></button>`;
+    } else {
+      s += `<button class="ug-btn lockedM" onclick="buyMod('${cls}')">
+        <span class="ug-t">🔒 ${m.name}</span><span class="ug-s">解锁 3 🪙 · ${m.desc}</span></button>`;
+    }
+  }
+  return `<div style="flex:1;min-width:168px;"><div class="ug-title" style="margin-bottom:6px;">${label}</div>
+    <div class="ug-row" style="flex-direction:column;align-items:stretch;">${s}</div></div>`;
+}
+function buildUpgradeScreen(){
+  const prog = getProg();
+  const L = prog.levels, ld = prog.loadout;
+  document.getElementById("ugGold").textContent = prog.gold;
+  const spdPct = Math.round((1-Math.pow(0.92,L.spd))*100);
+  let html = "";
+  // A 兵营
+  html += `<div class="ug-sec"><div class="ug-title">🛡️ 兵营强化（全兵种生效）</div>
+    <div class="ug-desc">生命 / 攻击 / 攻速 / 移速各自独立升级，花 3 金币升一级，每项最多 8 级</div><div class="ug-row">`
+    + ugBtn("hp","生命强化",`Lv ${L.hp}/${UG_MAX.hp}`,`全兵血量 +${L.hp*8}%`, L.hp<UG_MAX.hp)
+    + ugBtn("atk","攻击强化",`Lv ${L.atk}/${UG_MAX.atk}`,`全兵攻击 +${L.atk*8}%`, L.atk<UG_MAX.atk)
+    + ugBtn("spd","攻速强化",`Lv ${L.spd}/${UG_MAX.spd}`,`攻击频率 +${spdPct}%`, L.spd<UG_MAX.spd)
+    + ugBtn("move","移速强化",`Lv ${L.move}/${UG_MAX.move}`,`全兵移动速度 +${L.move*5}%`, L.move<UG_MAX.move)
+    + `</div></div>`;
+  // B 工坊
+  html += `<div class="ug-sec"><div class="ug-title">🏭 工坊强化（产能）</div>
+    <div class="ug-desc">产兵 / 容量 / 开局兵力，属于"种田"路线，每项最多 8 级</div><div class="ug-row">`
+    + ugBtn("prod","产兵加速",`Lv ${L.prod}/${UG_MAX.prod}`,`产兵速度 +${L.prod*10}%`, L.prod<UG_MAX.prod)
+    + ugBtn("cap","容量扩充",`Lv ${L.cap}/${UG_MAX.cap}`,`村庄兵力上限 +${L.cap*10}%`, L.cap<UG_MAX.cap)
+    + ugBtn("start","先遣军",`Lv ${L.start}/${UG_MAX.start}`,`开局兵力 +${L.start*15}%`, L.start<UG_MAX.start)
+    + `</div></div>`;
+  // C 科技（兵种形态）
+  html += `<div class="ug-sec"><div class="ug-title">🔬 兵种改造（解锁后可在队伍配置中切换）</div>
+    <div class="ug-desc">解锁新形态花 3 金币，切换不花钱 —— 比如升级了弩手，随时可在"队伍配置"切回弓箭手</div><div class="ug-row">`
+    + modGroup("melee","步兵形态", L.melee, ld.melee)
+    + modGroup("archer","弓手形态", L.archer, ld.archer)
+    + modGroup("tower","箭塔形态", L.tower, ld.tower)
+    + `</div></div>`;
+  document.getElementById("ugBody").innerHTML = html;
+}
+function buyUpgrade(key){
+  const prog = getProg();
+  if(prog.gold < 3 || prog.levels[key] >= (UG_MAX[key]||0)) return;
+  prog.gold -= 3; prog.levels[key]++;
+  saveProg(prog); Sfx.play("ui");
+  buildUpgradeScreen(); refreshGold();
+}
+function buyMod(cls){
+  const prog = getProg();
+  if(prog.gold < 3 || prog.levels[cls] >= UNIT_MODS[cls].length-1) return;
+  prog.gold -= 3; prog.levels[cls]++;
+  prog.loadout[cls] = prog.levels[cls]; // 解锁后默认切到新形态，玩家可随时切回
+  saveProg(prog); Sfx.play("conquer");
+  buildUpgradeScreen(); refreshGold();
+}
+function pickMod(cls, idx){
+  const prog = getProg();
+  if(idx > prog.levels[cls]) return;
+  prog.loadout[cls] = idx;
+  saveProg(prog); Sfx.play("ui");
+  buildUpgradeScreen();
+}
+function showUpgradeScreen(){
+  buildUpgradeScreen();
+  document.getElementById("upgradeScreen").style.display = "flex";
+  document.getElementById("diffSelect").style.display = "none";
+  document.getElementById("factionSelect").style.display = "none";
+}
+function refreshGold(){ document.getElementById("ssGold").textContent = getProg().gold; }
+// 返回开始界面（从暂停 / 结算等任意状态回标题）
+function backToTitle(){
+  running=false; paused=false;
+  document.getElementById("pauseOverlay").style.display="none";
+  document.getElementById("pauseBtn").textContent="暂停";
+  document.getElementById("banner").style.display="none";
+  document.getElementById("factionSelect").style.display="none";
+  document.getElementById("diffSelect").style.display="none";
+  refreshGold();
+  showStartScreen();
+}
+
+// ===================== 开局选阵营 =====================
+const FS_ACCENT = { henan:"#e23b3b", shanghai:"#2f6fed", beijing:"#e0a02f", guangdong:"#3fb54a" };
+function fsDim(v){ return v>0?"▲":v<0?"▼":"—"; }
+function buildFactionCards(){
+  const grid = document.getElementById("fsGrid");
+  grid.innerHTML = "";
+  for(const key of FACTION_ORDER){
+    const f = CFG.factions[key];
+    const prod = f.emitMul<0.95?1:f.emitMul>1.05?-1:0;
+    const move = f.speedMul>1.05?1:f.speedMul<0.95?-1:0;
+    const unit = (f.hpMul*f.atkMul)>1.05?1:(f.hpMul*f.atkMul)<0.95?-1:0;
+    const def  = f.towerMul>1.05?1:f.towerMul<0.95?-1:0;
+    const trait = (k,v)=>`<div class="fs-trait"><span class="fs-k">${k}</span><span class="fs-v ${v>0?'good':v<0?'bad':'neu'}">${fsDim(v)}</span></div>`;
+    const card = document.createElement("button");
+    card.className = "fs-faction";
+    card.style.setProperty("--fac-accent", FS_ACCENT[key]); // 阵营色顶条/悬停描边
+    card.innerHTML = `<div class="fs-top"><span class="fs-dot" style="background:${FS_ACCENT[key]}"></span><span class="fs-name">${f.name}</span></div>`
+      + `<div class="fs-tag">${f.tag}</div>`
+      + `<div class="fs-traits">${trait("生产速度",prod)}${trait("移动速度",move)}${trait("单兵强度",unit)}${trait("防御",def)}</div>`;
+    card.onclick = ()=>pickFaction(key);
+    grid.appendChild(card);
+  }
+}
+function showFactionSelect(){
+  buildFactionCards();
+  document.getElementById("factionSelect").style.display = "flex";
+  document.getElementById("diffSelect").style.display = "none";
+  document.getElementById("upgradeScreen").style.display = "none";
+}
+function pickFaction(key){
+  factionOf[1] = key;
+  // 两家 AI 从剩余阵营里随机抽（洗牌取前 2）
+  const rest = FACTION_ORDER.filter(x=>x!==key);
+  for(let i=rest.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [rest[i],rest[j]]=[rest[j],rest[i]]; }
+  factionOf[2] = rest[0];
+  factionOf[3] = rest[1];
+  document.getElementById("factionSelect").style.display = "none";
+  start();
+}
+
+function togglePause(){
+  if(!running) return;
+  paused = !paused;
+  document.getElementById("pauseBtn").textContent = paused ? "继续" : "暂停";
+  document.getElementById("pauseOverlay").style.display = paused ? "flex" : "none";
+  if(!paused){ lastTs = performance.now(); }
+}
+function showStartScreen(){ document.getElementById("startScreen").style.display="flex"; }
+
+// 流程：开始界面 → 难度选择 → 选阵营 → 开局；重开/再来一局同样先过难度选择
+document.getElementById("restart").onclick=()=>{ Sfx.play("ui"); showDiffSelect(); };
+document.getElementById("bannerBtn").onclick=()=>{ Sfx.play("ui"); showDiffSelect(); };
+document.getElementById("startBtn").onclick=()=>{
+  Sfx.init(); Sfx.play("ui");
+  document.getElementById("startScreen").style.display="none";
+  showDiffSelect();
+};
+document.getElementById("upgradeBtn").onclick=()=>{ Sfx.init(); Sfx.play("ui"); showUpgradeScreen(); };
+document.getElementById("ugBack").onclick=()=>{ Sfx.play("ui"); document.getElementById("upgradeScreen").style.display="none"; };
+document.getElementById("backTitleBtn").onclick=()=>{ Sfx.play("ui"); backToTitle(); };
+document.getElementById("dsBack").onclick=()=>{ Sfx.play("ui"); document.getElementById("diffSelect").style.display="none"; refreshGold(); showStartScreen(); };
+document.getElementById("pauseBtn").onclick=togglePause;
+document.getElementById("resumeBtn").onclick=togglePause;
+
+// 音量：暂停菜单滑杆（音量持久化）
+const volSlider = document.getElementById("volSlider");
+Sfx.vol = Math.min(1, Math.max(0, parseFloat(localStorage.getItem(VOL_KEY)) || 0.7));
+volSlider.value = Math.round(Sfx.vol*100);
+volSlider.addEventListener("input", ()=>{
+  Sfx.vol = volSlider.value/100;
+  localStorage.setItem(VOL_KEY, String(Sfx.vol));
+  Sfx.play("ui");
+});
+
+// V9 失焦自动暂停：切标签页 / 窗口失焦 → 自动暂停，防止 dt 跳变与挂机
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden && running && !paused) togglePause();
+});
+window.addEventListener("blur", ()=>{
+  if(running && !paused) togglePause();
+});
+
+refreshGold();
+showStartScreen();
+</script>
+</body>
+</html>
