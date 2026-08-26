@@ -2,9 +2,9 @@
 function mkEl(id){
   const el = {
     id, style:{ setProperty(){}, }, children:[], dataset:{},
-    appendChild(c){ el.children.push(c); }, classList:{ list:[], toggle(c,f){ if(f===undefined){ const i=el.classList.list.indexOf(c); i>=0?el.classList.list.splice(i,1):el.classList.list.push(c);} else { f?el.classList.list.push(c):el.classList.list.splice(el.classList.list.indexOf(c),1);} }, add(c){ if(!el.classList.list.includes(c)) el.classList.list.push(c); }, remove(c){ const i=el.classList.list.indexOf(c); if(i>=0)el.classList.list.splice(i,1); }, contains(c){return el.classList.list.includes(c);} },
+    appendChild(c){ el.children.push(c); }, classList:{ list:[], toggle(c,f){ const i=el.classList.list.indexOf(c); if(f===undefined){ i>=0?el.classList.list.splice(i,1):el.classList.list.push(c);} else if(f){ if(i<0) el.classList.list.push(c); } else { if(i>=0) el.classList.list.splice(i,1); } }, add(c){ if(!el.classList.list.includes(c)) el.classList.list.push(c); }, remove(c){ const i=el.classList.list.indexOf(c); if(i>=0)el.classList.list.splice(i,1); }, contains(c){return el.classList.list.includes(c);} },
     textContent:'', innerHTML:'', title:'', value:'', width:300, height:150,
-    addEventListener(){}, removeEventListener(){}, focus(){},
+    addEventListener(){}, removeEventListener(){}, focus(){}, setAttribute(){}, getAttribute(){ return null; },
     getContext(){ return ctxStub; },
     querySelector(){ return mkEl(id+'_q'); }, querySelectorAll(){ return []; },
     getBoundingClientRect(){ return {left:0,top:0,width:800,height:600}; },
@@ -105,12 +105,12 @@ factionOf[1]='human'; gGold[1]=20;
 const hAtk=unitStats(1,'melee').atk, hSpd=unitStats(1,'melee').spd;
 T('非哥布林同金币无增益', hAtk===unitStats(1,'melee').atk && goldBuffMul(1).atk===1);
 
-// 掠夺树：玩家阈值 10→7
+// 掠夺树 v4：玩家阈值 10→8（plunder 满级 2 级）
 factionOf[1]='goblin';
-getProg().races.goblin.b=3;
-T('掠夺树满级 → 阈值 7', goldStep(1)===7);
-gGold[1]=14; T('14 金 @阈值7 → 2 层', goldBuffMul(1).tiers===2);
-getProg().races.goblin.b=0;
+getProg().races.goblin.t.plunder=2;
+T('掠夺树满级 → 阈值 8', goldStep(1)===8);
+gGold[1]=16; T('16 金 @阈值8 → 2 层', goldBuffMul(1).tiers===2);
+getProg().races.goblin.t.plunder=0;
 
 // HUD 徽章逻辑（updateHUD 不抛错且徽章按种族显隐）
 running=false; updateHUD();
@@ -290,9 +290,9 @@ T('库存卡片化：品质标签 + 属性 + 穿上/分解按钮 + 按稀有度�
 showUpgradeScreen();
 T('军政厅仍可独立打开（强化页）', document.getElementById('upgradeScreen').style.display==='flex'
   && document.getElementById('armoryScreen').style.display==='none');
-// 首页：金币角标 / 每日状态只刷描述行 / 成就进度
+// 首页：金币角标 / 军械库解锁态描述行 / 成就进度（v5：每日挑战已移除，改为军械库门控提示）
 refreshMenuMeta();
-T('首页元信息刷新：每日提示与成就进度就位', document.getElementById('dailyHint').textContent.length>0
+T('首页元信息刷新：军械库提示与成就进度就位', document.getElementById('amHint').textContent.length>0
   && document.getElementById('achCnt').textContent.indexOf('/')>=0);
 
 // —— 战斗开场徽章（种族特色演出；时长×2 且不可点击跳过） ——

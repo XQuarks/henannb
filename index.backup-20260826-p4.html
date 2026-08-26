@@ -208,34 +208,15 @@
   #skillBtn.aiming{transform:scale(1.2); background:var(--cyan); color:#0b1517;
     box-shadow:0 10px 26px rgba(53,207,212,.35); z-index:60;}
   @media (max-width:560px){ #skillBtn{width:46px;height:46px;font-size:17px;bottom:calc(76px + env(safe-area-inset-bottom,0px));} }
-  /* 半军切换钮（v5.1）：叠在技能钮上方，点亮=青底 */
-  #halfBtn{position:fixed; bottom:calc(146px + env(safe-area-inset-bottom,0px)); left:16px; z-index:15;
-    width:52px; height:52px; font-size:19px; line-height:1; cursor:pointer;
-    border:1.5px solid var(--cyan); background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
-    color:var(--cyan); box-shadow:0 4px 14px rgba(0,0,0,.5); display:none;
-    transition:transform .12s ease, box-shadow .12s ease;}
-  #halfBtn:hover{transform:translateY(-2px);}
-  #halfBtn.on{background:var(--cyan); color:#0b1517; box-shadow:0 10px 26px rgba(53,207,212,.35);}
-  @media (max-width:560px){ #halfBtn{width:46px;height:46px;font-size:17px;bottom:calc(132px + env(safe-area-inset-bottom,0px));} }
 
-  /* ---------- 引导对白卡（v5.1 导演式 NPC 教学，不暂停战斗） ---------- */
+  /* ---------- 首关引导气泡 ---------- */
   #tutBubble{position:fixed; bottom:calc(58px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%);
-    z-index:16; display:none; align-items:center; gap:12px; max-width:calc(100vw - 32px);
-    background:rgba(14,15,17,.96); border:1px solid var(--yel); color:var(--ink);
-    padding:9px 6px 9px 12px; box-shadow:0 6px 20px rgba(0,0,0,.55); cursor:pointer;
+    z-index:16; display:none; align-items:center; gap:10px; max-width:calc(100vw - 32px);
+    background:rgba(18,19,21,.96); border:1px solid var(--yel); color:var(--ink); font-weight:600; font-size:13.5px;
+    padding:10px 14px 10px 18px; box-shadow:0 6px 20px rgba(0,0,0,.55);
     animation:cardPop .25s cubic-bezier(.2,1.4,.4,1); pointer-events:auto;}
-  #tutBubble .npc-face{flex:0 0 auto; width:40px; height:40px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    border:1.5px solid var(--yel); color:var(--yel); font-size:15px; background:#191a1d;
-    box-shadow:inset 0 0 10px rgba(255,250,0,.10);}
-  #tutBubble .npc-body{display:flex; flex-direction:column; gap:3px; min-width:0;}
-  #tutBubble .npc-name{font-family:var(--disp); font-size:11px; letter-spacing:3px; color:var(--yel); font-weight:700;}
-  #tutBubble #tutTxt{font-weight:600; font-size:13.5px; line-height:1.55; white-space:pre-wrap;}
-  #tutBubble .npc-more{flex:0 0 auto; font-size:11px; color:var(--yel); align-self:center;
-    animation:npcBlink 1s step-end infinite; visibility:hidden;}
-  @keyframes npcBlink{0%,100%{opacity:1}50%{opacity:.15}}
   #tutBubble #tutSkip{font:inherit; font-size:11px; border:none; background:transparent; color:var(--ink-dim);
-    cursor:pointer; padding:12px 12px; margin:-8px -4px -8px 0; touch-action:manipulation; align-self:center;}
+    cursor:pointer; padding:12px 14px; margin:-8px -10px -8px 0; touch-action:manipulation;}
   #tutBubble #tutSkip:hover{color:var(--yel);}
 
   /* ---------- 速胜结算按钮 ---------- */
@@ -389,49 +370,21 @@
     padding:26px 24px 22px; background:rgba(17,18,20,.82); border:1px solid var(--line-strong);
     animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
   #skillSelect .fs-card{max-width:640px;}
-  /* ---------- 通用弹层背景：顶光 + 细网格 + 斜纹 + 暗角（选族/选技/关卡详情/路线图共用） ---------- */
-  #factionSelect,#skillSelect,#levelBrief,#campaignScreen{
-    background:
-      radial-gradient(1100px 480px at 50% -10%, rgba(255,210,62,.07), transparent 62%),
-      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px),
-      repeating-linear-gradient(-45deg, rgba(255,255,255,.012) 0 2px, transparent 2px 11px),
-      linear-gradient(180deg,#15161a 0%, #0b0c0e 100%);
-    background-size:auto,32px 32px,32px 32px,auto,auto;
-    box-shadow:inset 0 0 140px rgba(0,0,0,.52);}
   #factionSelect h1,#skillSelect h1{font-family:var(--disp); font-size:25px; margin:0 0 6px; letter-spacing:2px;}
   #factionSelect .fs-sub,#skillSelect .fs-sub{margin:0 0 18px; color:var(--ink-soft); font-size:14px;}
   #factionSelect .fs-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
   @media(min-width:680px){ #factionSelect .fs-grid{grid-template-columns:repeat(4,1fr);} }
   #skillSelect .sk-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(min-width:680px){ #skillSelect .sk-grid{grid-template-columns:repeat(3,1fr);} }
-  /* 技能卡：图标主视觉 + 名称徽记 + 冷却/目标标签 + 描述钉底；选中框 + 出击二次确认按钮 */
+  /* 技能卡选中框 + 出击二次确认按钮 */
   #skillSelect .fs-faction{position:relative;}
-  #skillSelect .sk-grid .fs-faction{align-items:center; text-align:center; padding:20px 14px 14px;}
   #skillSelect .fs-faction.picked{border-color:var(--yel); border-top-color:var(--yel);
     box-shadow:0 0 0 2px rgba(255,210,62,.6), 0 8px 22px rgba(0,0,0,.5);}
   #skillSelect .fs-faction.picked::after{content:'✓ 已选'; position:absolute; top:8px; right:10px;
     font-family:var(--disp); font-size:11px; font-weight:700; color:var(--yel); letter-spacing:1px;}
-  #skillSelect .sk-icon{width:58px; height:58px; margin:0 auto 10px; display:flex; align-items:center;
-    justify-content:center; font-size:28px; line-height:1; color:var(--fac-accent,var(--yel));
-    background:radial-gradient(circle at 50% 32%, rgba(255,255,255,.07), transparent 62%),#16171b;
-    border:1px solid var(--line-strong);
-    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;}
-  #skillSelect .fs-faction:hover .sk-icon{transform:translateY(-2px) scale(1.05);
-    border-color:var(--fac-accent,var(--yel));}
-  #skillSelect .fs-faction.picked .sk-icon{border-color:var(--yel); box-shadow:0 0 14px rgba(255,210,62,.28);}
-  #skillSelect .sk-name{font-family:var(--disp); font-weight:700; font-size:15px; letter-spacing:1px;
-    display:flex; align-items:center; justify-content:center; gap:7px;}
-  #skillSelect .sk-exclusive{font-style:normal; font-family:var(--disp); font-size:10px; font-weight:700;
-    letter-spacing:1px; color:#111; background:var(--fac-accent,var(--yel)); padding:2px 6px;}
-  #skillSelect .sk-meta{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:8px 0 10px;}
-  #skillSelect .sk-meta span{font-family:var(--disp); font-size:10.5px; letter-spacing:.5px;
-    color:var(--ink-soft); border:1px solid var(--line); background:#101113; padding:3px 8px;}
-  #skillSelect .sk-grid .fs-faction .fs-passive{text-align:left;}
-  #skGo{display:block; margin:18px auto 0; padding:13px 46px; font:inherit; font-size:15px; font-weight:700;
+  #skGo{display:block; margin:16px auto 0; padding:12px 40px; font:inherit; font-size:15px; font-weight:700;
     letter-spacing:3px; background:var(--yel); color:#111; border:1px solid var(--yel);
-    clip-path:polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
-    cursor:pointer; transition:filter .12s ease, box-shadow .2s ease;}
+    border-radius:8px; cursor:pointer; transition:filter .12s ease, box-shadow .2s ease;}
   #skGo:hover:not(:disabled){filter:brightness(1.08);}
   #skGo:not(:disabled){animation:skGoPulse 1.6s ease infinite;}
   @keyframes skGoPulse{50%{box-shadow:0 0 18px rgba(255,210,62,.45);}}
@@ -509,60 +462,21 @@
 
   /* ---------- 关卡详情 ---------- */
   #levelBrief{position:fixed; inset:0; display:none; z-index:39; padding:16px; overflow:auto; animation:overlayFade .2s ease;}
-  #levelBrief .lb-card{margin:auto; max-width:500px; width:100%;
-    background:linear-gradient(180deg,#17181d 0%,#101114 100%);
-    border:1px solid var(--line-strong); border-top:3px solid var(--fac-accent,var(--yel));
-    padding:24px 24px 18px; box-shadow:var(--shadow);
+  #levelBrief .lb-card{margin:auto; max-width:480px; width:100%; background:rgba(17,18,20,.85);
+    border:1px solid var(--line-strong); padding:22px 22px 16px; box-shadow:var(--shadow);
     animation:cardPop .3s cubic-bezier(.2,1.3,.4,1);}
-  #levelBrief .lb-ch{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:4px;
-    color:var(--fac-accent,var(--yel)); display:flex; align-items:center; justify-content:center; gap:12px;}
-  #levelBrief .lb-ch::before,#levelBrief .lb-ch::after{content:""; width:36px; height:1px;
-    background:currentColor; opacity:.45;}
-  #levelBrief h1{font-family:var(--disp); font-size:26px; margin:8px 0 14px; letter-spacing:2px;
-    text-align:center; line-height:1.3;}
-  #levelBrief .lb-story{font-size:13px; line-height:1.75; color:var(--ink-soft);
-    border-left:3px solid var(--fac-accent,var(--yel)); background:rgba(255,255,255,.03);
-    padding:10px 13px; margin:0 0 14px;}
-  /* 情报行：敌军 / 地形 整行铺陈，头像 SVG 定尺不再撑爆排版 */
-  #levelBrief .lb-chips{display:flex; flex-direction:column; gap:8px; margin:12px 0 0;}
-  #levelBrief .lb-chip{display:flex; align-items:center; gap:9px; min-height:40px; padding:7px 11px;
-    font-family:var(--disp); font-size:12px; letter-spacing:.5px; text-align:left;
-    background:#131417; border:1px solid var(--line); color:var(--ink-soft);}
-  #levelBrief .lb-chip svg{width:24px; height:24px; flex:none; border-radius:3px;
-    outline:1px solid rgba(255,255,255,.16);}
-  #levelBrief .lb-chip .lb-lab{flex:none; font-weight:700; letter-spacing:1px; color:var(--cyan);}
-  #levelBrief .lb-chip.foe{border-color:rgba(255,90,60,.45); background:rgba(255,90,60,.06); color:var(--ink);}
-  #levelBrief .lb-chip.foe .lb-lab{color:var(--danger);}
-  /* 敌方指挥官大像卡：种族色边框 + 顶部危险纹 + 族徽角标 + 姓名名牌 */
-  #levelBrief .lb-seclab{font-family:var(--disp); font-size:10px; font-weight:700; letter-spacing:3px;
-    color:var(--danger); display:flex; align-items:center; gap:10px; margin:0 0 8px;}
-  #levelBrief .lb-seclab::before,#levelBrief .lb-seclab::after{content:""; height:1px; flex:1;
-    background:rgba(255,90,60,.35);}
-  #levelBrief .lb-cmds{display:flex; gap:12px; margin:0 0 4px;}
-  #levelBrief .lb-cmd{flex:1; position:relative; background:#121316; border:1px solid var(--rac,var(--danger));
-    padding:9px 9px 8px; box-shadow:0 6px 18px rgba(0,0,0,.45);
-    transition:transform .15s ease, border-color .15s ease;}
-  #levelBrief .lb-cmd:hover{transform:translateY(-2px); border-color:var(--rac);}
-  #levelBrief .lb-cmd::before{content:""; position:absolute; top:0; left:0; right:0; height:4px;
-    background:repeating-linear-gradient(45deg,var(--rac) 0 7px,transparent 7px 14px); opacity:.55;}
-  #levelBrief .lb-cmd::after{content:""; position:absolute; bottom:-1px; right:-1px; width:11px; height:11px;
-    border-bottom:2px solid var(--rac); border-right:2px solid var(--rac);}
-  #levelBrief .lb-cface{position:relative; width:100%; aspect-ratio:1/1; overflow:visible;
-    background:#0d0e10; outline:1px solid rgba(255,255,255,.09);}
-  #levelBrief .lb-cface>svg{width:100%; height:100%; display:block;}
-  #levelBrief .lb-cemb{position:absolute; right:-5px; bottom:-5px; width:27px; height:27px;
-    background:#101114; border:1.5px solid var(--rac); padding:2px; box-shadow:0 3px 8px rgba(0,0,0,.6);}
-  #levelBrief .lb-cemb svg{width:100%; height:100%; display:block;}
-  #levelBrief .lb-cname{font-family:var(--disp); font-size:15px; font-weight:700; letter-spacing:1px;
-    margin:8px 0 1px; color:var(--ink);}
-  #levelBrief .lb-ctitle{font-family:var(--disp); font-size:10.5px; letter-spacing:.5px; color:var(--ink-soft);}
-  #levelBrief .lb-reward{margin:0 0 16px; padding:7px 11px; text-align:center;
-    font-family:var(--disp); font-size:12px; letter-spacing:.5px; color:var(--gold);
-    border:1px dashed var(--line-strong); background:rgba(255,210,62,.04);}
-  #levelBrief .lb-btns{display:flex; gap:10px;}
-  #levelBrief .lb-btns button{flex:1;}
+  #levelBrief .lb-ch{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:3px; color:var(--yel);}
+  #levelBrief h1{font-family:var(--disp); font-size:23px; margin:4px 0 8px; letter-spacing:1px;}
+  #levelBrief .lb-story{font-size:13px; line-height:1.7; color:var(--ink-soft);
+    border-left:3px solid var(--fac-accent,var(--yel)); padding:2px 0 2px 10px; margin:0 0 12px;}
+  #levelBrief .lb-chips{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px;}
+  #levelBrief .lb-chip{font-family:var(--disp); font-size:11px; padding:4px 9px; background:#131417;
+    border:1px solid var(--line); color:var(--ink-soft); letter-spacing:.5px;}
+  #levelBrief .lb-chip.foe{border-color:rgba(255,90,60,.5); background:rgba(255,90,60,.07); color:var(--danger); font-weight:600;}
+  #levelBrief .lb-reward{font-size:12px; color:var(--ink-soft); margin:0 0 14px;}
+  #levelBrief .lb-btns{display:flex; gap:10px; justify-content:center;}
   #levelBrief button{font:inherit; font-size:15px; border:1px solid var(--line-strong); background:#131417; color:var(--ink);
-    padding:11px 26px; cursor:pointer; font-weight:700; letter-spacing:1px; transition:border-color .12s ease, color .12s ease;}
+    padding:10px 30px; cursor:pointer; font-weight:700; letter-spacing:1px; transition:border-color .12s ease, color .12s ease;}
   #levelBrief button:hover{border-color:var(--yel); color:var(--yel);}
   #levelBrief button#lbGo{background:var(--yel); color:#111; border-color:var(--yel);
     clip-path:polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);}
@@ -581,14 +495,6 @@
   #dialogueScene.briefing .dlg-box{backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(14,15,17,.96);}
   #dialogueScene .dlg-stage{position:relative; height:52vh; min-height:240px; display:flex;
     align-items:flex-end; justify-content:center; gap:min(14vw,120px); padding:0 24px;}
-  /* 卡司行：玩家方在左，敌方指挥官客座登场在右；多人同台时收紧间距与头像尺寸 */
-  #dialogueScene .dlg-row{display:flex; align-items:flex-end; justify-content:center;
-    gap:min(12vw,110px); width:100%;}
-  #dialogueScene.multi .dlg-row{gap:min(6vw,56px);}
-  #dialogueScene.multi .dlg-face{width:min(19vw,112px); height:min(19vw,112px);}
-  #dialogueScene.multi .dlg-face{font-size:min(9vw,56px);}
-  /* 客座（敌方）头像：种族色边框由 JS 内联写入，另加红色敌意辉光以区分阵营 */
-  #dialogueScene .dlg-portrait.guest .dlg-face{box-shadow:0 10px 30px rgba(0,0,0,.55), 0 0 16px rgba(255,90,60,.22);}
   #dialogueScene .dlg-portrait{display:flex; flex-direction:column; align-items:center; gap:8px;
     filter:saturate(.35) brightness(.72) grayscale(.4); transform:translateY(10px) scale(.92);
     transition:filter .25s ease, transform .25s ease;}
@@ -983,7 +889,6 @@
 <div id="factionSelect">
   <div class="fs-card">
     <h1 id="fsTitle">选择你的种族</h1>
-    <div class="en-sub">CHOOSE YOUR FACTION</div>
     <p class="fs-sub" id="fsSub">每个种族有一条专属的统一之路与剧情，挑一个开干</p>
     <div class="fs-grid" id="fsGrid"></div>
     <p class="fs-foot" id="fsFoot">你固定为绿色；敌方种族由每关剧情决定 · 特性对 AI 同样生效</p>
@@ -993,7 +898,6 @@
 <div id="skillSelect">
   <div class="fs-card">
     <h1>选择携带技能</h1>
-    <div class="en-sub">TACTICAL LOADOUT</div>
     <p class="fs-sub" id="skSub">通用 3 + 种族专属 2，选 1 个带入战局（冷却制）</p>
     <div class="sk-grid" id="skGrid"></div>
     <button id="skGo" disabled>⚔ 出击（先选择一个技能）</button>
@@ -1021,8 +925,6 @@
     <div class="lb-ch" id="lbCh">第一章</div>
     <h1 id="lbName">关卡名</h1>
     <p class="lb-story" id="lbStory"></p>
-    <div class="lb-seclab">敌军指挥官 ENEMY COMMANDERS</div>
-    <div class="lb-cmds" id="lbCmds"></div>
     <div class="lb-chips" id="lbChips"></div>
     <p class="lb-reward" id="lbReward"></p>
     <div class="lb-btns">
@@ -1035,10 +937,8 @@
   <div class="dlg-sky" id="dlgSky"></div>
   <button class="dlg-skip" id="dlgSkip">跳过 SKIP</button>
   <div class="dlg-stage">
-    <div class="dlg-row" id="dlgRow">
-      <div class="dlg-portrait" id="dlgP0"><div class="dlg-face" id="dlgF0">◆</div><span class="dlg-pname" id="dlgN0"></span><span class="dlg-ptitle" id="dlgT0"></span></div>
-      <div class="dlg-portrait" id="dlgP1"><div class="dlg-face" id="dlgF1">◆</div><span class="dlg-pname" id="dlgN1"></span><span class="dlg-ptitle" id="dlgT1"></span></div>
-    </div>
+    <div class="dlg-portrait" id="dlgP0"><div class="dlg-face" id="dlgF0">◆</div><span class="dlg-pname" id="dlgN0"></span><span class="dlg-ptitle" id="dlgT0"></span></div>
+    <div class="dlg-portrait" id="dlgP1"><div class="dlg-face" id="dlgF1">◆</div><span class="dlg-pname" id="dlgN1"></span><span class="dlg-ptitle" id="dlgT1"></span></div>
     <div class="dlg-chapter" id="dlgChapter" style="display:none;"><div class="ch-sub" id="dlgChSub"></div><div class="ch-t" id="dlgChT"></div></div>
   </div>
   <div class="dlg-box" id="dlgBox">
@@ -1132,20 +1032,10 @@
 <!-- 集结悬浮手柄：右下角，不占顶栏/底栏，拖动到建筑 = 全军集结 -->
 <button id="rallyBtn" title="按住拖到任意建筑，松手=全军集结到该点">◉</button>
 <div id="rallyHint">松手 = 全军集结到该建筑</div>
-<!-- 引导对白卡（v5.1 导演式）：军师 NPC 说话告知怎么做，战斗照常运行、玩家边听边操作 -->
-<div id="tutBubble" role="status" aria-live="polite">
-  <div class="npc-face" aria-hidden="true">◆</div>
-  <div class="npc-body">
-    <span class="npc-name">军师</span>
-    <span id="tutTxt"></span>
-  </div>
-  <span class="npc-more" id="tutMore" aria-hidden="true">▼</span>
-  <button id="tutSkip" title="跳过引导">✕</button>
-</div>
+<!-- 首关交互式引导气泡（四族 L1 各一次，完成后不再出现） -->
+<div id="tutBubble" role="status" aria-live="polite"><span id="tutTxt"></span><button id="tutSkip" title="跳过引导">✕</button></div>
 <!-- 技能按钮：左下角，点按释放 / 两段瞄准 -->
 <button id="skillBtn" title="点击释放携带技能（冷却制）">✦</button>
-<!-- 半军切换（v5.1）：点亮后所有拖拽只出一半兵力；长按 ≥0.4s 再拖仍是半军的备选手势 -->
-<button id="halfBtn" title="半军出击：点亮后每次拖拽只出一半兵力（留守更多）">½</button>
 <!-- 速胜结算：胜负已定时出现，点击立即结算胜利（跳过全歼垃圾时间） -->
 <button id="fastWinBtn" title="敌军已无力回天，直接结算胜利">▶ 胜利在望 · 立即结算</button>
 
@@ -1164,8 +1054,6 @@ const CFG = {
   shotSpeed: 340,        // 弹道（箭矢）飞行速度 px/s
   towerCap: 8,           // 箭塔驻军上限（塔兵自然回复上限；即箭塔有效血量，削弱后更易被攻下）
   bossPulseR: 120,       // Boss 要塞 AOE 脉冲半径 px（每 8s 清除圈内所有球）
-  recallWin: 3,          // 召回窗口 s：出兵后点出发村可撤回该队（v5.1 由 0.9 放宽，旧值几乎不可能按到）
-  recallWinVeteran: 6,   // 人类·老兵方阵分支：召回窗口延长到 6s
   // 兵种数值（基础模板：村庄/箭塔出步兵；三种兵营的兵见下方 CAMP_UNITS）
   units: {
     // 普通建筑出来的兵（步兵）
@@ -2155,8 +2043,7 @@ const CAMP_META={
 const CAMPAIGNS={
 human:[
  {name:'烽火边境', skel:'teach', foes:['goblin','goblin'], brief:'哥布林劫掠者越境烧村，夺回每一寸被占的土地。',
-    d:[[1,'陛下！哥布林劫掠者趁夜越境，烧了边境的麦田。'],[0,'他们以为人类是好拿捏的软柿子。'],[0,'格瑞姆元帅，传我军令——夺回每一寸被占的土地。'],[1,'遵命！按住村庄拖向目标即可出兵，把绿色旗帜插遍全岛！'],
-       [2,'火把都点了——冲进村去！一件不留！'],[3,'别乱烧！先抢粮仓再烧屋子，这票的账才算得清！']],
+   d:[[1,'陛下！哥布林劫掠者趁夜越境，烧了边境的麦田。'],[0,'他们以为人类是好拿捏的软柿子。'],[0,'格瑞姆元帅，传我军令——夺回每一寸被占的土地。'],[1,'遵命！按住村庄拖向目标即可出兵，把绿色旗帜插遍全岛！']],
   win:'边境的狼烟熄了，但这场战争才刚刚开始。'},
  {name:'渡口阻击', skel:'tutBridge', foes:['goblin','dragon'], brief:'敌联军先锋扑向白石渡口——守住桥头，就是守住国门。',
   d:[[0,'斥候来报，敌军先锋正扑向白石渡口。'],[1,'渡口只有一座石桥，谁守住桥头，谁就守住了国门。'],[0,'那么，让敌人一颗粒尘都过不来。出击！']],
@@ -2186,8 +2073,7 @@ human:[
            [0,'那就用腿和刀说话。步兵堵住路口，一个斥候也别放进来。']]},
   ]},
  {name:'两线告急', skel:'pincer', foes:['dragon','goblin'], brief:'敌军南北对进，王师腹背受敌——被夹在中间，就从中路撕开缺口。',
-    d:[[1,'陛下！北面是龙军主力，南面是哥布林劫掠团——两面同时压过来了！'],[0,'腹背受敌？哼，那就在中间列阵，先断其一路，再回头收拾另一路。'],[1,'遵命！中路是我们的，两翼的敌人一个也跑不了。'],
-       [2,'两线齐压——先看看是人类的墙硬，还是龙的爪硬。'],[3,'抢完北边抢南边，一块地都不给人类留！']],
+   d:[[1,'陛下！北面是龙军主力，南面是哥布林劫掠团——两面同时压过来了！'],[0,'腹背受敌？哼，那就在中间列阵，先断其一路，再回头收拾另一路。'],[1,'遵命！中路是我们的，两翼的敌人一个也跑不了。']],
   win:'南北两路敌军先后崩溃，中间突破成了战争史的教科书。',
   dir:[
    {at:1.2, who:1, focus:[{owner:2},{owner:3}], zoom:1.3, label:'两线之敌',
@@ -2206,9 +2092,7 @@ human:[
            [0,'先一起关门打狗。至于门后的账……打完再算。']]},
   ]},
  {name:'王对王', skel:'regicide', foes:['dragon','goblin'], brief:'侵略者的皇帝御驾亲征——不必恋战，攻占金帐，斩首即胜。',
-   cmd:['奥瑞斯','裂爪'],
-    d:[[0,'侵略者的皇帝亲自来了，带着他最骄傲的将领。'],[1,'斥候确认了皇帐位置——只要大帐易主，他们的战争就结束了。'],[0,'我也是国王。国王对国王——让他看看谁的意志更坚硬。'],
-       [2,'朕御驾亲征，就是要亲眼看着人类的王冠落地。'],[3,'大王说了：皇帝亲自压阵，这票十拿九稳！']],
+   d:[[0,'侵略者的皇帝亲自来了，带着他最骄傲的将领。'],[1,'斥候确认了皇帐位置——只要大帐易主，他们的战争就结束了。'],[0,'我也是国王。国王对国王——让他看看谁的意志更坚硬。']],
   win:'侵略者的皇冠滚落在地，战争即将结束。',
   dir:[
    {at:1.2, who:1, focus:'king', zoom:2.05, label:'斩首目标 · 敌皇金帐',
@@ -2216,9 +2100,7 @@ human:[
            [0,'不必吞下整个王国。传令全军：目标金帐——斩首！']]},
   ]},
  {name:'和平之门', skel:'boss', foes:['dragon','goblin'], brief:'攻克敌方王座要塞即获全胜——注意八秒一次的毁灭脉冲预警圈。',
-   cmd:['薇拉','尖尖'],
-    d:[[0,'最后了。他们的王座要塞就在前方，占领它，战争就结束了。'],[1,'要塞每八秒一次毁灭脉冲，红色预警圈内的士兵会被清空——务必小心。'],[0,'让最后一面绿色的旗帜，插在和平之门上。全军——突击！'],
-       [2,'皇帝倒下了，但龙翼未折。放马过来，人类。'],[3,'家底全押在这儿了……守住！拜托守住啊！']],
+   d:[[0,'最后了。他们的王座要塞就在前方，占领它，战争就结束了。'],[1,'要塞每八秒一次毁灭脉冲，红色预警圈内的士兵会被清空——务必小心。'],[0,'让最后一面绿色的旗帜，插在和平之门上。全军——突击！']],
   win:'要塞陷落，四方来朝。人类用坚守赢得了和平。',
   dir:[
    {at:3, who:1, focus:'boss', zoom:1.75, label:'⚠ 占领即胜 · 八秒一脉冲',
@@ -2228,8 +2110,7 @@ human:[
 ],
 dragon:[
  {name:'蝼蚁的村庄', skel:'teach', foes:['human','dwarf'], brief:'拿边境的小村庄练练爪子——让低等种族记住龙焰的温度。',
-   d:[[1,'陛下，边境有个小村子，人类建的，吵吵闹闹。'],[0,'蝼蚁筑巢，也配叫村子？'],[1,'拿它练练爪子？就当……热身。'],[0,'准了。让低等种族记住龙焰的温度。'],
-      [2,'就凭前面那个冒烟的破村子？老元帅我一个人守就够了。'],[3,'锤子都闲得发痒了——正好让蜥蜴见识见识铁砧的硬度！']],
+  d:[[1,'陛下，边境有个小村子，人类建的，吵吵闹闹。'],[0,'蝼蚁筑巢，也配叫村子？'],[1,'拿它练练爪子？就当……热身。'],[0,'准了。让低等种族记住龙焰的温度。']],
   win:'蝼蚁们逃散了。龙的征途，从脚下开始。'},
  {name:'焚断桥', skel:'bridge', foes:['human','goblin'], brief:'敌军把守石桥——断了他们的退路，前后夹击。',
   d:[[1,'陛下的前锋已被一座石桥拦住去路。'],[0,'愚蠢的人类把军队摆在桥头？那就断了他们的退路。'],[1,'烧断后路，前后夹击——一个都别放跑。']],
@@ -2238,8 +2119,7 @@ dragon:[
   d:[[0,'拆掉所有箭塔。'],[1,'陛下？！那是防御工事——'],[0,'高贵的龙族不需要躲在塔后面。徒手，碾碎他们。'],[1,'……遵命。这将是纯粹实力的一课。']],
   win:'没有箭塔的战场，只剩龙裔的脚步声。'},
  {name:'圣塔归龙', skel:'holy', foes:['human','dwarf'], brief:'矮人声称中央三塔是他们先祖的遗迹——占领它，宣示主权。',
-    d:[[1,'中央矗立着三座古塔，矮人声称那是他们的先祖遗迹。'],[0,'荒谬。龙飞过天空时，这些石头还没出生。'],[0,'占领它。让所有种族知道，连他们的神迹都属于龙。'],
-       [3,'先祖的石塔被龙占了？！弟兄们，抄家伙——夺回来！'],[2,'想夺塔？先问问元帅的剑答不答应。']],
+   d:[[1,'中央矗立着三座古塔，矮人声称那是他们的先祖遗迹。'],[0,'荒谬。龙飞过天空时，这些石头还没出生。'],[0,'占领它。让所有种族知道，连他们的神迹都属于龙。']],
   win:'圣塔顶端升起了龙旗。主权，无需讨论。',
   dir:[
    {at:3, who:1, focus:'towers', zoom:1.45, label:'古龙圣塔 · 得塔者得胜',
@@ -2286,10 +2166,9 @@ dragon:[
   ]},
 ],
 goblin:[
-  {name:'饿肚子开工', skel:'teach', foes:['human','dwarf'], brief:'部落断粮三天——先抢个人类村子练手（首占无主地块 +3 金币，每 10 金币全军攻击/移速 +5%）。',
-   d:[[1,'大王！部落断粮三天了，小弟们饿得直啃盾牌……'],[0,'盾牌是铁的，怎么能啃呢！……咦，等等，铁也能卖钱？'],[1,'隔壁人类的村子就有粮又有钱，咱们……'],[0,'还等什么！按住村子拖出去就能抢——呃，是"出征"！'],[1,'对了对了大王，头一回抢下的无主地盘值 3 枚金币——每攒满 10 枚，兄弟们的刀更快、腿更勤，攻和移速各涨 5%！'],
-      [2,'斥候都探好了：村口连个像样的岗哨都没有——抢他娘的！'],[3,'哼，让那群绿皮尝尝矮人锤子的滋味。']],
-   win:'第一票到手！部落今晚围着篝火烤肉庆功！'},
+ {name:'饿肚子开工', skel:'teach', foes:['human','dwarf'], brief:'部落断粮三天——先抢个人类村子练手（首占无主地块 +3 金币，每 10 金币全军攻击/移速 +5%）。',
+  d:[[1,'大王！部落断粮三天了，小弟们饿得直啃盾牌……'],[0,'盾牌是铁的，怎么能啃呢！……咦，等等，铁也能卖钱？'],[1,'隔壁人类的村子就有粮又有钱，咱们……'],[0,'还等什么！按住村子拖出去就能抢——呃，是"出征"！'],[1,'对了对了大王，头一回抢下的无主地盘值 3 枚金币——每攒满 10 枚，兄弟们的刀更快、腿更勤，攻和移速各涨 5%！']],
+  win:'第一票到手！部落今晚围着篝火烤肉庆功！'},
  {name:'此桥是我开', skel:'toll', foes:['human','dragon'], brief:'商队必经的石桥——抢满 30 枚金币就收手，见好就收！',
    d:[[0,'前面的石桥，商队必经之路！'],[1,'大王，"此山是我开，此树是我栽"的下半句怎么念来着？'],[0,'简单！把桥头抢下来，过路费一个金币都不能少！']],
   win:'商队哭着交完买路财。哥布林的"商道"开业大吉！',
@@ -2350,8 +2229,7 @@ goblin:[
 ],
 dwarf:[
  {name:'嘲笑的代价', skel:'teach', foes:['human','goblin'], brief:'有人笑矮人个子矮——教他们知道，矮子的斧头有多高。',
-   d:[[1,'王！有人管咱叫……叫"矮子"！还笑！'],[0,'谁笑的？'],[1,'好几家都笑了……边境那村的守军昨天还学咱走路的样子。'],[0,'好。很好。教他们知道，矮子的斧头有多高。'],
-      [2,'学矮子走路怎么了？长多高，就该干多高的活儿。'],[3,'嘿嘿，笑一笑不要钱——可抢你一票，是要收利息的！']],
+  d:[[1,'王！有人管咱叫……叫"矮子"！还笑！'],[0,'谁笑的？'],[1,'好几家都笑了……边境那村的守军昨天还学咱走路的样子。'],[0,'好。很好。教他们知道，矮子的斧头有多高。']],
   win:'第一个嘲笑者付出了代价。但这只是开始。'},
  {name:'断桥立誓', skel:'bridge', foes:['human','dragon'], brief:'在断桥上立誓：直到所有嘲笑者低头为止——战斗不止！',
   d:[[0,'铜砧，就在这座断桥上，我要立个誓。'],[1,'您说！全族的锤子都听着！'],[0,'从今天起，直到所有嘲笑矮人的家伙低头为止——战斗不止！'],[1,'誓言立下！桥头就是第一课，一个都不许放过河！']],
@@ -2754,7 +2632,7 @@ function send(from, to, keep, half){
             : from.type==='rogue' ? 'rogue' : from.type==='siege' ? 'siege' : 'melee';
   const squad=[];
   for(let i=0;i<cnt;i++) squad.push(pushBall(from, to, from.owner, i/cnt, cls));
-  from.lastSquad = { t: gameTime, balls: squad };   // 召回窗口：CFG.recallWin 秒内点出发村可撤回该队
+  from.lastSquad = { t: gameTime, balls: squad };   // 召回窗口：0.9s 内点出发村可撤回该队
   Sfx.play("send");
 }
 
@@ -2991,7 +2869,7 @@ function arriveBall(node, owner, b){
       capStreakLast = gameTime;
       if(capStreak >= 3) floatText(node.x, node.y - node.rad - 24, '连下 '+capStreak+' 城！', '#fffa00');
       guideEvent('capture', { node });   // 可操控引导：兵营占领课判定（按 node.type 匹配）
-      if(tut && tut.step===2){ tut.step=3; tut.doneAt=gameTime; tutShow('首城到手！吞并全岛即可获胜', 'info'); }
+      if(tut && tut.step===2){ tut.step=3; tut.doneAt=gameTime; tutShow('◆ 首城到手！吞并全岛即可获胜'); }
       // 成就：占领箭塔 / 一局集齐三种兵营
       if(node.type==='tower') unlockAch('tower');
       // 重械营首占提示（每局一次）：介绍新建筑
@@ -3236,34 +3114,10 @@ const AIDE_LINES={
     behind:['王，坯子还烫着呢——好铁不怕锤，慢慢来！','这点火候算什么！矮人最不缺的就是耐心！'],
     half:['王，过半的地界都打上了咱的钢印！'] },
 };
-// —— 敌方阵营战况喊话（右上角播报条）：taunt 开场叫嚣 / press 大优施压 / falter 受挫动摇 / down 覆灭遗言 ——
-const FOE_LINES={
-  human:{ // 罗兰 · 边境骑士：纪律感与骑士腔
-    taunt:['为了王国！你们越境的那一刻，就已经输了。','放下武器——国王陛下会给你体面。'],
-    press:['看到差距了吗？这就是王师的纪律。','王旗在推进。识时务的话，现在投降还来得及。'],
-    falter:['稳住……不能在这里倒下！','请求增援！重复——请求增援！'],
-    down:['人类的疆土……一寸……也没带走吗……'] },
-  dragon:{ // 锡拉德 · 龙翼军官：高傲军官腔
-    taunt:['蝼蚁们，仰望天空吧——那是你们此生最后的风景。','龙焰所过之处，不需要谈判。'],
-    press:['挣扎吧。绝望，也是高贵的娱乐。','看见了吗？这就是血脉的差距。'],
-    falter:['区区凡人……竟伤到龙翼……','重整队形！高贵者不容有失！'],
-    down:['龙之血……不会白白流淌的……记住这一天……'] },
-  goblin:{ // 裂爪 · 劫掠头目：匪气+生意经
-    taunt:['你们家粮仓的位置，我们都提前踩好点啦！','兄弟们开饭啦——先抢为敬！'],
-    press:['哈哈！你们的城头快插满我们的旗啦！','投降吧！大王保证——只抢三成！'],
-    falter:['亏了亏了！这票要亏本了！','妈呀……这批家伙怎么这么能打！'],
-    down:['大王……小弟先行一步……欠的账就一笔勾销吧……'] },
-  dwarf:{ // 巴恩 · 铁砧王子：少年气盛的王子腔
-    taunt:['矮人的锤子几百年没开荤了——今天就拿你们的头盔试音！','嘴上笑矮子？好啊，那就用脑袋来验证。'],
-    press:['跑啊！让整个大陆看看，谁才是笑话！','锤子已经举起来了——它落下的地方就是坟！'],
-    falter:['胡子保不住了……先撤一步！','这些家伙是铁打的吗？！'],
-    down:['先祖在上……孩儿……尽力了……'] },
-};
 const AC_SHOW_MS=3400, AC_GAP_MS=420;   // 每条停留 / 收起后到下条的间隔
 let acQueue=[], acBusy=false, acHideT=null, acLastLine='';
 let aideAlive={2:true,3:true};          // 敌方势力存活跟踪（全歼播报用）
 let aideDefendAt=-99, aideBehindAt=0, aideHalfDone=false;
-let foeTauntDone=false, foeBarkAt=0, foeFalterDone=false;   // 敌方喊话节奏控制
 function pickAideLine(arr){
   if(arr.length===1) return arr[0];
   let l; do{ l=arr[Math.floor(Math.random()*arr.length)]; }while(l===acLastLine);
@@ -3281,18 +3135,13 @@ function aideSay(kind, vars){
 function acPump(){
   if(acBusy || !acQueue.length) return;
   acBusy=true;
-  const cast=CAST[campRace]||[];
-  const defNpc=(cast[1]||cast[0])||{name:'',title:'',face:''};   // 副官=卡司第二人（默认播报者）
-  const item=acQueue.shift();
-  const isObj=item&&typeof item==='object';
-  const tx=isObj?item.text:item; acLastLine=tx;
-  const npc=(isObj&&item.npc)||defNpc;
-  const accent=(isObj&&item.accent)||FS_ACCENT[campRace];
+  const cast=CAST[campRace], npc=cast[1]||cast[0];   // 副官=卡司第二人
   const el=document.getElementById('aideCall');
-  document.getElementById('acFace').innerHTML=npcPortrait(npc.face, accent);
+  document.getElementById('acFace').innerHTML=npcPortrait(npc.face, FS_ACCENT[campRace]);
   document.getElementById('acName').textContent=npc.name+' · '+npc.title;
+  const tx=acQueue.shift(); acLastLine=tx;
   document.getElementById('acText').textContent=tx;
-  el.style.setProperty('--ac', accent||'#e3c56a');
+  el.style.setProperty('--ac', FS_ACCENT[campRace]||'#e3c56a');
   // 窄屏：左上角战利品箱与播报同区，播报让位到箱子正下方，避免盖住金币数
   if(window.innerWidth<=560){
     const lb=document.getElementById('lootBox');
@@ -3310,30 +3159,8 @@ function acPump(){
 function aideReset(){
   clearTimeout(acHideT); acQueue=[]; acBusy=false; acLastLine='';
   aideAlive={2:true,3:true}; aideDefendAt=-99; aideBehindAt=0; aideHalfDone=false;
-  foeTauntDone=false; foeBarkAt=0; foeFalterDone=false;
   const el=document.getElementById('aideCall');
   if(el){ el.classList.remove('on'); el.style.top=''; }
-}
-// —— 敌方阵营喊话：以该势力的在场指挥官头像+族色播报（盟友期/已覆灭不开口） ——
-function foeSay(kind, o){
-  if(lastMode!=='camp' || !factionOf[o]) return;
-  if(!aideAlive[o]) return;
-  if(!hostileOf(1,o)) return;
-  const r=factionOf[o], arr=(FOE_LINES[r]||{})[kind];
-  if(!arr || !arr.length) return;
-  let cmd=null;
-  const lvDef=pendingCampLevel?campLv(campRace,pendingCampLevel):null;
-  for(const c of lvCommanders(lvDef,pendingCampLevel||1)){ if(c.race===r){ cmd=c; break; } }
-  if(!cmd){
-    const cc=CAST[r], m=cc[2]||cc[cc.length-1];
-    cmd={...m, race:r};
-  }
-  acQueue.push({text:pickAideLine(arr), npc:{name:cmd.name,title:cmd.title,face:cmd.face}, accent:FS_ACCENT[r]||'#ff5a3c'});
-  acPump();
-}
-function foeSayAny(kind){   // 任选一个仍存活且与玩家敌对的势力开口
-  const os=[2,3].filter(o=>aideAlive[o] && hostileOf(1,o));
-  if(os.length) foeSay(kind, os[Math.floor(Math.random()*os.length)]);
 }
 function aideOpenBark(){   // 开战进场白：稍等战场可见后再冒出来；开局导演简报期间自动顺延，不与对白抢戏
   if(lastMode!=='camp' || !campRace) return;
@@ -3341,16 +3168,7 @@ function aideOpenBark(){   // 开战进场白：稍等战场可见后再冒出�
     if(!running) return;
     if(paused){ aideOpenBark(); return; }   // 导演简报/暂停中：等恢复后再进场
     if(!finale) aideSay('open');
-    foeOpenTaunt();                          // 敌方指挥官开场叫嚣：再错开 5 秒进场（一次性）
   }, 900);
-}
-function foeOpenTaunt(){
-  setTimeout(function tryTaunt(){
-    if(!running || finale || foeTauntDone) return;
-    if(paused || dirBusy){ setTimeout(tryTaunt,4000); return; }   // 简报中不打断，顺延重试
-    foeTauntDone=true;
-    foeSayAny('taunt');
-  }, 5200);
 }
 
 // ===================== AI 携带技（难度 ≥6 随机 1 个，CD ×1.5） =====================
@@ -3859,7 +3677,6 @@ function update(dt){
     for(const o of [2,3]){
       if(aideAlive[o] && !owners.has(o)){
         aideAlive[o]=false;
-        foeSay('down', o);   // 覆灭遗言先入队，随后我方副官报捷
         aideSay('wipe', {foe:CFG.races[factionOf[o]].name});
       }
     }
@@ -3867,11 +3684,6 @@ function update(dt){
     const ratio = ownerCap(1)/(totalCap()||1);
     if(!aideHalfDone && ratio>=0.5){ aideHalfDone=true; aideSay('half'); }
     if(gameTime>=75 && ratio<=0.22 && gameTime-aideBehindAt>=100){ aideBehindAt=gameTime; aideSay('behind'); }
-    // 8b-2) 敌方喊话：敌军大优施压（冷却 100s）/ 我方碾压时敌军动摇（一次）
-    if(!finale && gameTime>=60 && gameTime-foeBarkAt>=100){
-      if(ratio<=0.15){ foeBarkAt=gameTime; foeSayAny('press'); }
-      else if(ratio>=0.70 && !foeFalterDone){ foeFalterDone=true; foeBarkAt=gameTime; foeSayAny('falter'); }
-    }
   }
   // 8c) 胜利在望：碾压局提供速胜按钮，跳过"全歼前垃圾时间"（对标 MW2 差评点）；终局演出期间不弹
   if(!finale){
@@ -4205,16 +4017,6 @@ function draw(){
         ctx.font='bold 12px system-ui'; ctx.fillStyle='#ffd23e'; ctx.textAlign='center';
         ctx.fillText('⚒ '+Math.floor(gGold[1]||0)+'/'+lootGoalN+' G', pb3.x, pb3.y-pb3.rad*2.05);
       }
-    }
-    // 召回窗口指示（v5.1）：有可召回部队的出发村外圈青色倒计时弧 + ↺ 剩余秒数
-    for(const n of nodes){
-      if(n.owner!==1 || !n.lastSquad) continue;
-      const rw=recallWindow(), rem=rw-(gameTime-n.lastSquad.t);
-      if(rem<=0) continue;
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.rad*1.62,-Math.PI/2,-Math.PI/2+(rem/rw)*Math.PI*2);
-      ctx.lineWidth=3; ctx.strokeStyle='rgba(53,207,212,.9)'; ctx.stroke();
-      ctx.font='bold 11px system-ui'; ctx.fillStyle='#35cfd4'; ctx.textAlign='center';
-      ctx.fillText('↺'+rem.toFixed(1), n.x, n.y-n.rad*1.95);
     }
     // 导演标注：脉冲双环 + 弹跳箭头 + 标签牌（dirT=真实时钟，暂停对白期间照常动画）
     for(const m of cineMarks){
@@ -6308,11 +6110,6 @@ function updateHUD(){
   } else {
     skillBtn.style.display='none';
   }
-  // 半军钮（v5.1）：与技能钮同步，仅对局中显示
-  {
-    const hdisp = running ? 'block' : 'none';
-    if(_hudPrev.halfDisp!==hdisp){ _hudPrev.halfDisp=hdisp; halfBtn.style.display=hdisp; }
-  }
 }
 
 // ===================== 哥布林战利品箱悬浮框 =====================
@@ -6394,7 +6191,7 @@ cv.addEventListener("pointerdown", e=>{
   const p=getPos(e); const n=nodeAtNear(p.x,p.y,12);
   if(n && n.owner===1){
     drags.set(e.pointerId, { from:n, pos:p, to:null, t0:performance.now(), half:false });
-    if(tut && tut.step===0){ tut.step=1; tutShow('很好！现在拖到附近的灰色中立地块上'); }
+    if(tut && tut.step===0){ tut.step=1; tutShow('拖到附近的灰色中立地块上'); }
     guideEvent('touch');
   }
 });
@@ -6437,45 +6234,32 @@ function endDrag(e){
   drags.delete(e.pointerId);
   const p=getPos(e);
   // 防误触（V11）：位移 < 10px 视为"点了一下"——落在刚出兵的村上=召回该队，其余忽略
-  if(dist(d.from, p) < 10){
-    const sq=d.from.lastSquad;               // 失败反馈（v5.1）：召回不再是静默失败，玩家能知道为什么没反应
-    if(sq && !tryRecall(d.from)){
-      floatText(d.from.x, d.from.y-d.from.rad-14,
-        (gameTime-sq.t > recallWindow()) ? '↺ 召回窗口已过' : '部队已抵达', '#8a8f94');
-    }
-    return;
-  }
+  if(dist(d.from, p) < 10){ tryRecall(d.from); return; }
   const t=nodeAtNear(p.x,p.y,12);
   if(t){
-    dragSend(d, t);
+    send(d.from, t, undefined, d.half);   // half=true：长按半军，只出一半
+    guideEvent('send', { half:d.half });
     if(tut && tut.step===1){ tut.step=2; tutShow('兵球正在进发，到达后自动占领！'); }
   }
-}
-// 拖拽出兵统一入口（endDrag 调用；e2e 直测）：长按手势 d.half 或 ½ 钮常开 halfMode → 只出一半
-function dragSend(d, t){
-  const useHalf = !!(d.half || halfMode);
-  send(d.from, t, undefined, useHalf);
-  guideEvent('send', { half:useHalf });
 }
 cv.addEventListener("pointerup", e=>{ if(skillAiming){ resolveAim(e); } else { endDrag(e); } });
 cv.addEventListener("pointercancel", e=>{ drags.delete(e.pointerId); skillAiming=false; if(typeof skillBtn!=='undefined') skillBtn.classList.remove('aiming'); });
 // 长按不弹系统菜单 / 不触发文本选择（移动端细节）
 cv.addEventListener("contextmenu", e=>e.preventDefault());
 
-// ===================== 召回窗口（出兵后 CFG.recallWin 秒内点出发村 = 撤回该队） =====================
+// ===================== 召回窗口（F4：出兵后 0.9s 内点出发村 = 撤回该队） =====================
 // 未出发的球直接取消承诺；已升空的掉头返航（从最近格心重规划走回去）。防误触 + 反悔权。
 function nearestNodeTo(x,y){
   let bn=null, bd=Infinity;
   for(const n of nodes){ const dx=n.x-x, dy=n.y-y, d2=dx*dx+dy*dy; if(d2<bd){ bd=d2; bn=n; } }
   return bn;
 }
-function recallWindow(){
-  return (factionOf[1]==='human' && treeHas('human','veteran')) ? CFG.recallWinVeteran : CFG.recallWin;
-}
 function tryRecall(n){
   if(!n || !running || paused) return false;
   const sq = n.lastSquad;
-  if(!sq || gameTime - sq.t > recallWindow()) return false;
+  // 人类·老兵方阵：召回窗口 0.9s → 3s
+  const rWin = (factionOf[1]==='human' && treeHas('human','veteran')) ? 3 : 0.9;
+  if(!sq || gameTime - sq.t > rWin) return false;
   let recalled=0;
   for(const b of sq.balls){
     if(b.dead) continue;
@@ -6583,18 +6367,6 @@ skillBtn.addEventListener("click", ()=>{
   }
 });
 
-// ===================== 半军模式开关（v5.1：长按拖出之外的稳定入口） =====================
-// 点亮后所有拖拽只出一半兵力；长按 ≥0.4s 再拖的旧手势保留为备选。每局开始重置为全军。
-const halfBtn = document.getElementById("halfBtn");
-let halfMode = false;
-halfBtn.addEventListener("click", ()=>{
-  if(!running) return;
-  Sfx.init(); Sfx.play('ui');
-  halfMode=!halfMode;
-  halfBtn.classList.toggle('on', halfMode);
-  halfBtn.title = halfMode ? '半军出击：已开启，再点一次恢复全军' : '半军出击：点亮后每次拖拽只出一半兵力（留守更多）';
-});
-
 // ===================== 速胜结算（胜利在望：跳过全歼垃圾时间） =====================
 // 条件：玩家占比 ≥70% 且敌方合计 ≤2 个据点（且非 Boss 关）→ 底部浮现按钮；点击后同样走终局演出再结算
 const fastWinBtn = document.getElementById("fastWinBtn");
@@ -6628,75 +6400,48 @@ function updateFastWin(owners){
 // 三步：按住基地 → 拖向中立块 → 松手看占领；完成后提示目标，4 秒收尾。跳过按钮随时可关。
 const TUT_KEY="rtu_tut_done";
 let tut=null;
-const tutEl={ bubble:document.getElementById("tutBubble"), txt:document.getElementById("tutTxt"),
-  more:document.getElementById("tutMore") };
-let tutTypeTimer=null;
-// v5.1 导演式引导：军师 NPC 逐字说话（打字机），战斗照常运行；dataset.full 始终保存完整台词
-function tutShow(txt, mode){
-  clearInterval(tutTypeTimer);
-  const el=tutEl.txt;
-  el.dataset.full=txt;
-  let i=0; el.textContent='';
-  if(txt){
-    tutTypeTimer=setInterval(()=>{
-      i++; el.textContent=txt.slice(0,i);
-      if(i>=txt.length) clearInterval(tutTypeTimer);
-    },24);
-  }
-  // ▼ 仅在"说完自动继续"的信息步闪烁；等待玩家动作的步骤不显示（避免误导去点对白）
-  tutEl.more.style.visibility = (mode==='info') ? 'visible' : 'hidden';
-  tutEl.bubble.style.display="flex";
-}
-function tutHide(){ clearInterval(tutTypeTimer); tutEl.txt.textContent=''; tutEl.txt.dataset.full=''; tutEl.bubble.style.display="none"; }
-// 点对白卡：打字中→立即补全全文；信息步说完→立即进入下一句（动作步必须真做动作，点卡无效）
-tutEl.bubble.addEventListener("click", ()=>{
-  Sfx.play('ui');
-  const el=tutEl.txt, full=el.dataset.full||'';
-  if(el.textContent!==full){ clearInterval(tutTypeTimer); el.textContent=full; return; }
-  if(guide && !paused){
-    const st=GUIDES[guide.key][guide.i];
-    if(st && !st.wait) guideNext();
-  }
-});
+const tutEl={ bubble:document.getElementById("tutBubble"), txt:document.getElementById("tutTxt") };
+function tutShow(txt){ tutEl.txt.textContent=txt; tutEl.bubble.style.display="flex"; }
+function tutHide(){ tutEl.bubble.style.display="none"; }
 function tutFinish(){ tut=null; tutHide(); try{ localStorage.setItem(TUT_KEY,"1"); }catch(e){} }
 function tutBegin(){
   let done=false; try{ done=!!localStorage.getItem(TUT_KEY); }catch(e){}
   if(done || lastMode!=='camp' || campStage!==1){ tut=null; tutHide(); return; }
   tut={step:0, doneAt:0};
-  tutShow('指挥官，按住你的绿色基地不放');
+  tutShow('▸ 按住你的绿色基地不放');
 }
 
-// ===================== 可操控引导（guide v5.1）：导演式 NPC 对白 + 不暂停可操作 =====================
-// 形态升级：由底部气泡改为「军师」NPC 对白卡（打字机说话 + 地图金圈标注），战斗照常运行，
-// 玩家边听边操作；引导期间 AI 冻结（aiFrozen），等玩家完成指定动作（wait 事件）后军师讲下一句。
+// ===================== 可操控引导（guide v5）：不暂停、允许操作的任务式教学层 =====================
+// 与导演简报（dirBusy 暂停+对白）互补：guide 只挂气泡提示 + 地图金圈标注，战斗照常运行，
+// 引导期间 AI 冻结（aiFrozen），等玩家完成指定动作（wait 事件）后自动进入下一步。
 // 完成标记存 prog.tut[key]，每关引导只出现一次；设置页「一键解锁」不影响引导触发。
 const GUIDES = {
   // L2 渡口阻击（固定桥图）：半军 + 召回
   l2:[
-    {txt:'指挥官，先练「半军」：点亮左下角 ½ 钮再拖向敌村，或按住基地约半秒再拖——这次只出一半兵力，另一半留守', focus:'base', label:'半军出击', wait:'send', chk:d=>!!(d&&d.half)},
-    {txt:'再学「召回」：先随手拖一队兵出去，然后立刻点一下出发的村子——部队马上掉头返航', focus:'base', label:'点村召回', wait:'recall'},
-    {txt:'干得漂亮！一半进攻、一半留守——白石渡口就交给你了'},
+    {txt:'▸ 战术课①半军：按住基地不放约半秒，再拖向敌村——这次只出一半兵力', focus:'base', label:'长按 ½', wait:'send', chk:d=>!!(d&&d.half)},
+    {txt:'▸ 战术课②召回：出兵后立刻点一下出发的村子，部队会掉头返航', focus:'base', label:'点村召回', wait:'recall'},
+    {txt:'◆ 学会了！一半进攻、一半留守——守住白石渡口'},
   ],
   // L3 抢收麦季：技能瞄准
   l3:[
-    {txt:'你出征前选的技能就在左下角 ✦ 钮里——冷却制，免费使用'},
-    {txt:'来，放一次看看：先点 ✦ 按钮；需要目标的话，再点一个目标', wait:'skill'},
-    {txt:'记住：技能威力大、冷却长——留给关键团战'},
+    {txt:'▸ 技能课：左下角 ✨ 按钮就是出征前选的技能（冷却制，免费）'},
+    {txt:'▸ 现在放一次：点技能按钮；需要目标的话再点一个目标', wait:'skill'},
+    {txt:'◆ 技能威力大、冷却长——关键团战再交'},
   ],
   // L5 雾中渗透：兵营克制（弓箭手）
   l5:[
-    {txt:'金圈处是弓箭手兵营——派兵占领它，别让敌人抢了先', focus:'type:archery', label:'弓箭手兵营', wait:'capture', chk:d=>d.node.type==='archery'},
-    {txt:'弓手会在行军途中停下远程射击敌方兵线——克制行进中的大军，但血薄怕围殴'},
+    {txt:'▸ 兵种课：金圈是弓箭手兵营——派兵占领它', focus:'type:archery', label:'弓箭手兵营', wait:'capture', chk:d=>d.node.type==='archery'},
+    {txt:'◆ 弓手飞行途中会停下远程射击敌方兵线：克制行进中的大军，但血薄怕围殴'},
   ],
   // L6 两线告急：法师营解锁介绍
   l6:[
-    {txt:'新兵种解锁！紫圈是法师兵营——派兵占领它', focus:'type:mage', label:'法师营 · 新！', wait:'capture', chk:d=>d.node.type==='mage'},
-    {txt:'法师弹带溅射、命中敌城还能磨掉 1 驻军——攻坚好手，就是脆'},
+    {txt:'▸ 新兵种解锁：紫圈是法师兵营——派兵占领它', focus:'type:mage', label:'法师兵营 · 新！', wait:'capture', chk:d=>d.node.type==='mage'},
+    {txt:'◆ 法师弹带溅射、命中敌城还能磨掉 1 驻军——攻坚好手，就是脆'},
   ],
   // L7 光复村镇：重械营解锁介绍
   l7:[
-    {txt:'攻城重械营解锁了——派兵占领金圈里的它', focus:'type:siege', label:'重械营 · 新！', wait:'capture', chk:d=>d.node.type==='siege'},
-    {txt:'重械慢如牛但伤害高：对据点驻军杀伤 ×1.6——啃硬骨头的专用锤'},
+    {txt:'▸ 新兵种解锁：攻城重械营——派兵占领它', focus:'type:siege', label:'重械营 · 新！', wait:'capture', chk:d=>d.node.type==='siege'},
+    {txt:'◆ 重械慢如牛但伤害高：对据点驻军杀伤 ×1.6——啃硬骨头的专用锤'},
   ],
 };
 let guide=null;        // { key, i } 当前引导与步骤索引
@@ -6730,7 +6475,7 @@ function guideNext(){
   const st=steps[guide.i];
   st._at=gameTime;
   cineMarks=guideFocus(st.focus).map(n=>({ x:n.x, y:n.y, r:n.rad*1.35, label:st.label||'' }));
-  tutShow(st.txt, st.wait?'act':'info');   // 军师说话：动作步不显示▼（须真做动作），信息步说完自动继续
+  tutShow(st.txt);
 }
 function guideEvent(type,data){
   if(!guide || paused) return;
@@ -6807,7 +6552,6 @@ function stageBattle(){
   // 技能/装备运行态初始化
   curSkill = pendingSkill || getProg().skill || 'rush';
   skillReadyAt=0; skillAiming=false; skillBtn.classList.remove('aiming');
-  halfMode=false; halfBtn.classList.remove('on');   // 每局开始恢复全军出击（v5.1）
   mines=[]; skillRushUntil=hornUntil=plunderUntil=0;
   // AI 携带技：生效难度 ≥6 或关卡强制时各随机带 1 个（通用池 ∪ 其种族池）
   aiSkill={2:null,3:null}; aiSkillCd={2:0,3:0};
@@ -7156,7 +6900,7 @@ function showCampaignRoad(){
   document.getElementById('campaignScreen').style.display='flex';
 }
 
-// ===================== 关卡详情弹层（剧情引言 + 敌方指挥官 + 规则 + 出征） =====================
+// ===================== 关卡详情弹层（剧情引言 + 规则 + 敌方阵容 + 出征） =====================
 function openLevelBrief(id){
   const lvDef=campLv(campRace,id); if(!lvDef) return;
   pendingCampLevel=id; lastMode='camp';
@@ -7166,17 +6910,9 @@ function openLevelBrief(id){
   document.getElementById('lbName').textContent='第'+id+'关 · '+lvDef.name;
   document.querySelector('#levelBrief .lb-card').style.setProperty('--fac-accent',FS_ACCENT[campRace]);
   document.getElementById('lbStory').textContent=lvDef.brief;
-  // 敌方指挥官大像卡：种族色边框 + 族徽角标 + 姓名名牌（一眼看出"谁家的谁"）
-  const cmds=lvCommanders(lvDef,id);
-  document.getElementById('lbCmds').innerHTML = cmds.map(c=>{
-    const emb=EMBLEM_OF[c.race]?EMBLEM_OF[c.race]():'';
-    return `<div class="lb-cmd" style="--rac:${FS_ACCENT[c.race]||'var(--danger)'}">`
-      +`<div class="lb-cface">${npcPortrait(c.face, FS_ACCENT[c.race])}<span class="lb-cemb">${emb}</span></div>`
-      +`<div class="lb-cname">${c.name}</div>`
-      +`<div class="lb-ctitle">${c.title} · ${CFG.races[c.race].name}军</div></div>`;
-  }).join('');
+  const foeTxt=lvDef.foes.map(r=>npcPortrait(CAST[r][0].face, FS_ACCENT[r])+CFG.races[r].name).join(' & ');
   document.getElementById('lbChips').innerHTML =
-    `<span class="lb-chip"><span class="lb-lab">地形 MAP</span>${skel.info}</span>`;
+    `<span class="lb-chip foe">敌军 FORCE ▸ ${foeTxt}</span><span class="lb-chip">地形 MAP ▸ ${skel.info}</span>`;
   const cleared=id<getCampaign(campRace);
   document.getElementById('lbReward').textContent = cleared
     ? '★ 已通关 · 温故知新，常规掉落'
@@ -7305,16 +7041,12 @@ const DLG_SKY={ human:['#39404d','#12151b'], dragon:['#4a3a14','#15120a'], gobli
 const NPC_FACES={
   human0:{skin:'#f2c9a5',cloth:'#4a6da8',trim:'#e3c56a',hat:'crown', brow:'stern',mouth:'stern'},   // 莱昂三世·国王
   human1:{skin:'#e5b28a',cloth:'#7d6248',trim:'#c8b89a',hat:'helm',beard:'short',scar:true,brow:'gruff',mouth:'gruff'}, // 格瑞姆·老元帅
-  human2:{skin:'#e8bd94',cloth:'#3f5e8f',trim:'#b9c4d6',hat:'helm',brow:'stern',mouth:'stern'},     // 罗兰·边境骑士
   dragon0:{skin:'#ecdcbc',cloth:'#a8862e',trim:'#e8cf7a',hat:'horns',brow:'stern',mouth:'stern'},   // 奥瑞斯·龙皇
   dragon1:{skin:'#f0ddc0',cloth:'#8c6d24',trim:'#d9bd62',hat:'horn1',pony:true,brow:'sly',mouth:'smirk'}, // 薇拉·龙将
-  dragon2:{skin:'#e8d5b0',cloth:'#7c5e1e',trim:'#c9ae52',hat:'horn1',scar:true,brow:'stern',mouth:'smirk'}, // 锡拉德·龙翼军官
   goblin0:{skin:'#7fae56',cloth:'#6a4a2e',trim:'#c9a15a',ears:true,fang:true,tooth:true,brow:'gruff',mouth:'grin'}, // 咕噜姆·大王
   goblin1:{skin:'#8fb964',cloth:'#55603a',trim:'#b9c99a',ears:true,specs:true,brow:'sly',mouth:'smile'}, // 尖尖·军师
-  goblin2:{skin:'#79a44f',cloth:'#5d4526',trim:'#c9a15a',ears:true,fang:true,scar:true,brow:'gruff',mouth:'gruff'}, // 裂爪·劫掠头目
   dwarf0:{skin:'#e2ac82',cloth:'#7a4a30',trim:'#d9b64e',hat:'dhelm',beard:'grand',brow:'gruff',mouth:'gruff'}, // 铁须·矮人王
   dwarf1:{skin:'#d99e72',cloth:'#5f4630',trim:'#a8886a',hat:'goggles',beard:'short',soot:true,brow:'sly',mouth:'grin'}, // 铜砧·锻匠
-  dwarf2:{skin:'#e6b48c',cloth:'#8a3535',trim:'#d9b64e',hat:'dhelm',beard:'short',brow:'sly',mouth:'smirk'}, // 巴恩·铁砧王子
 };
 function npcPortrait(key, accent){
   const c=NPC_FACES[key];
@@ -7388,31 +7120,13 @@ function npcPortrait(key, accent){
   return '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg>';
 }
 
-// 卡司表：face 对应 NPC_FACES 参数组（0=君主 1=副官 2=方面指挥官；敌方阵容由 1/2 轮替，君主仅在剧本指定时登场）
+// 卡司表：face 对应 NPC_FACES 参数组
 const CAST={
-  human:[{name:'莱昂三世',title:'人类国王',face:'human0'},{name:'格瑞姆',title:'老元帅',face:'human1'},{name:'罗兰',title:'边境骑士',face:'human2'}],
-  dragon:[{name:'奥瑞斯',title:'龙皇',face:'dragon0'},{name:'薇拉',title:'御前龙将',face:'dragon1'},{name:'锡拉德',title:'龙翼军官',face:'dragon2'}],
-  goblin:[{name:'咕噜姆',title:'哥布林大王',face:'goblin0'},{name:'尖尖',title:'军师',face:'goblin1'},{name:'裂爪',title:'劫掠头目',face:'goblin2'}],
-  dwarf:[{name:'铁须',title:'矮人王',face:'dwarf0'},{name:'铜砧',title:'大锻匠',face:'dwarf1'},{name:'巴恩',title:'铁砧王子',face:'dwarf2'}],
+  human:[{name:'莱昂三世',title:'人类国王',face:'human0'},{name:'格瑞姆',title:'老元帅',face:'human1'}],
+  dragon:[{name:'奥瑞斯',title:'龙皇',face:'dragon0'},{name:'薇拉',title:'御前龙将',face:'dragon1'}],
+  goblin:[{name:'咕噜姆',title:'哥布林大王',face:'goblin0'},{name:'尖尖',title:'军师',face:'goblin1'}],
+  dwarf:[{name:'铁须',title:'矮人王',face:'dwarf0'},{name:'铜砧',title:'大锻匠',face:'dwarf1'}],
 };
-// 族徽映射：关卡详情指挥官卡的种族角标（与开场战吼徽章同一套几何 SVG）
-const EMBLEM_OF={ human:emblemHuman, goblin:emblemGoblin, dragon:emblemDragon, dwarf:emblemDwarf };
-// 关卡敌军指挥官解析：返回与 lvDef.foes 对齐的 {race,ci,name,title,face} 数组。
-// cmd 可手写指定每一路的带兵者——数字=卡司序号 / 字符串=人名；缺省按关数在非君主成员中确定性轮换。
-function lvCommanders(lvDef, lvId){
-  if(!lvDef || !Array.isArray(lvDef.foes)) return [];
-  return lvDef.foes.map((r,si)=>{
-    const cast=CAST[r]||CAST.human;
-    let ci;
-    const c=lvDef.cmd && lvDef.cmd[si];
-    if(typeof c==='number' && cast[c]) ci=c;
-    else if(typeof c==='string'){
-      const k=cast.findIndex(m=>m.name===c); ci=k>=0?k:1;
-    } else ci=1+((lvId*3+si*5)%Math.max(1,cast.length-1));
-    const m=cast[ci]||cast[cast.length-1];
-    return { race:r, ci, name:m.name, title:m.title, face:m.face };
-  });
-}
 let dlgLines=null, dlgIdx=0, dlgAfter=null, dlgTimer=null;
 // hex → rgba（对话遮罩半透明化：能透过背景看到战斗地图）
 function hexA(hex,a){
@@ -7424,39 +7138,10 @@ function showDialogue(onDone, overMap){
   if(!lvDef || !lvDef.d || !lvDef.d.length){ onDone(); return; }
   startDialogueScene(lvDef.d, overMap, onDone);
 }
-// 对话引擎核心：给定台词数组（[说话人,文本]）在视觉小说场景中播放；结束后回调。
-// 说话人：数字 0/1=玩家方君主/副官；≥2=敌方指挥官（按本关 foes 顺序，见 lvCommanders）。
+// 对话引擎核心：给定台词数组（[说话人序号,文本] 列表）在视觉小说场景中播放；结束后回调
 // clearFx=true（导演简报）：禁用背景磨砂与遮罩，地图信息完整可见
-let dlgGuests=[], dlgSlotOf={};   // 本关敌方指挥官与其在场景中的头像槽位
-function dlgBuildCast(lines){
-  const lvId=pendingCampLevel, lvDef=lvId?campLv(campRace,lvId):null;
-  dlgGuests=lvCommanders(lvDef,lvId||1);
-  const used=new Set();
-  for(const ln of (lines||[])){ const w=ln&&ln[0]; if(typeof w==='number'&&w>=2) used.add(w-2); }
-  const row=document.getElementById('dlgRow');
-  row.innerHTML='';
-  const pc=CAST[campRace]||[];
-  const mk=(npc,race,idx,guest)=>{
-    const d=document.createElement('div');
-    d.className='dlg-portrait'+(guest?' guest':''); d.id='dlgP'+idx;
-    d.innerHTML='<div class="dlg-face" id="dlgF'+idx+'"'
-      +(guest?' style="border-color:'+(FS_ACCENT[race]||'#ff5a3c')+'"':'')
-      +'>'+npcPortrait(npc.face, FS_ACCENT[race])+'</div>'
-      +'<span class="dlg-pname" id="dlgN'+idx+'">'+npc.name+'</span>'
-      +'<span class="dlg-ptitle" id="dlgT'+idx+'">'+npc.title+'</span>';
-    row.appendChild(d);
-  };
-  mk(pc[0],campRace,0,false);
-  mk(pc[1]||pc[0],campRace,1,false);
-  dlgSlotOf={}; let n=2;
-  for(let g=0;g<dlgGuests.length;g++){
-    if(!used.has(g)) continue;
-    dlgSlotOf[g]=n; mk(dlgGuests[g],dlgGuests[g].race,n,true); n++;
-  }
-  return n>2;   // 是否多人同台（用于收紧舞台间距）
-}
 function startDialogueScene(lines, overMap, onDone, clearFx){
-  const sky=DLG_SKY[campRace];
+  const cast=CAST[campRace], sky=DLG_SKY[campRace];
   const sc=document.getElementById('dialogueScene');
   // on-map 模式：遮罩半透明 + 轻磨砂，透出身后的战场；普通模式保持原来的实色天空；
   // briefing（clearFx）模式：无磨砂无遮罩——镜头正在展示地图内容，不能糊
@@ -7467,7 +7152,11 @@ function startDialogueScene(lines, overMap, onDone, clearFx){
       ? `linear-gradient(180deg, ${hexA(sky[0],.52)} 0%, ${hexA(sky[1],.80)} 100%)`
       : `linear-gradient(180deg, ${sky[0]} 0%, ${sky[1]} 100%)`;
   sc.style.setProperty('--fac-accent',FS_ACCENT[campRace]);
-  sc.classList.toggle('multi', dlgBuildCast(lines));
+  for(let i=0;i<2;i++){
+    document.getElementById('dlgF'+i).innerHTML=npcPortrait(cast[i].face, FS_ACCENT[campRace]);
+    document.getElementById('dlgN'+i).textContent=cast[i].name;
+    document.getElementById('dlgT'+i).textContent=cast[i].title;
+  }
   dlgLines=lines; dlgIdx=-1; dlgAfter=onDone;
   hideAllScreens();
   document.getElementById('dlgChapter').style.display='none';
@@ -7481,20 +7170,10 @@ function dlgNextLine(){
   dlgIdx++;
   if(dlgIdx>=dlgLines.length){ dlgFinish(); return; }
   const [who,text]=dlgLines[dlgIdx];
-  // 说话人解析：0/1=玩家方固定槽位；≥2=敌方指挥官（映射到其客座槽位）
-  let talk=-1, npc=null;
-  if(typeof who==='number'){
-    if(who<2){ talk=who; npc=(CAST[campRace]||[])[who]; }
-    else{
-      const s=dlgSlotOf[who-2];
-      if(s!=null){ talk=s; npc=dlgGuests[who-2]||null; }
-    }
-  }
-  const row=document.getElementById('dlgRow');
-  for(const k of (row.children||[])){
-    if(k.classList) k.classList.toggle('talking', typeof k.id==='string' && k.id==='dlgP'+talk);
-  }
-  document.getElementById('dlgWho').textContent=npc?npc.name+' · '+npc.title:'—';
+  document.getElementById('dlgP0').classList.toggle('talking',who===0);
+  document.getElementById('dlgP1').classList.toggle('talking',who===1);
+  const cast=CAST[campRace];
+  document.getElementById('dlgWho').textContent=cast[who]?cast[who].name+' · '+cast[who].title:'—';
   document.getElementById('dlgMore').textContent='▼ 点击继续';
   // 打字机效果：可点击立即补全
   const el=document.getElementById('dlgText');
@@ -7725,7 +7404,7 @@ const RACE_TREES = {
       levy:       { name:'征召兵役', icon:'∴', col:61, row:2, max:1, cost:[6], type:'mech', parents:['standingarmy'], excl:'veteran',
                     desc:'【机制】全军出球间隔 -8%，人海更快成型' },
       veteran:    { name:'老兵方阵', icon:'↩', col:89, row:2, max:1, cost:[6], type:'mech', parents:['standingarmy'], excl:'levy',
-                    desc:'【机制】召回窗口 3 秒 → 6 秒，出兵反悔更从容' },
+                    desc:'【机制】召回窗口 0.9 秒 → 3 秒，出兵反悔更从容' },
       royal:      { name:'皇家军团', icon:'★', col:74, row:3, max:1, cost:[10], type:'stat', parents:['levy','veteran'],
                     desc:'全兵种生命 +6%，步兵攻击额外 +10%' },
     } },
@@ -8110,9 +7789,8 @@ function showSkillSelect(race){
     card.dataset.sk = id;
     card.style.setProperty('--fac-accent', FS_ACCENT[race]);
     const tgtTxt = sk.tgt==='none' ? '即发' : sk.tgt==='ally' ? '点己方据点' : sk.tgt==='enemy' ? '点敌方据点' : '点地图位置';
-    card.innerHTML = `<div class="sk-icon">${sk.icon}</div>`
-      + `<div class="sk-name">${sk.name}${sk.race?'<i class="sk-exclusive">专属</i>':''}</div>`
-      + `<div class="sk-meta"><span>⏱ 冷却 ${skillCdFor(id).toFixed(0)}s</span><span>◎ ${tgtTxt}</span></div>`
+    card.innerHTML = `<div class="fs-top"><span class="fs-dot" style="background:${FS_ACCENT[race]}"></span><span class="fs-name">${sk.icon} ${sk.name}</span>${sk.race?'<span style="margin-left:auto;font-size:11px;color:var(--ink-soft);">专属</span>':''}</div>`
+      + `<div class="fs-tag">冷却 ${skillCdFor(id).toFixed(0)}s · ${tgtTxt}</div>`
       + `<div class="fs-passive">${sk.desc}</div>`;
     card.onclick = ()=>pickSkill(id);
     grid.appendChild(card);
@@ -8220,11 +7898,7 @@ document.getElementById("skGo").onclick=deployFromSkillSelect;
 document.getElementById("pauseBtn").onclick=togglePause;
 document.getElementById("resumeBtn").onclick=togglePause;
 // 首关引导：跳过按钮
-document.getElementById("tutSkip").onclick=(e)=>{
-  e.stopPropagation(); Sfx.play('ui');
-  tutFinish();
-  if(guide) guideFinish();   // v5.1：✕ 同时跳过进行中的军师课（否则 AI 冻结挂着、对白消失却无法推进）
-};
+document.getElementById("tutSkip").onclick=(e)=>{ e.stopPropagation(); Sfx.play('ui'); tutFinish(); };
 
 // 音量：暂停菜单滑杆（音量持久化）
 const volSlider = document.getElementById("volSlider");

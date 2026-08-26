@@ -2,7 +2,7 @@
 function mkEl(id){
   const el = {
     id, style:{ setProperty(){}, }, children:[], dataset:{},
-    appendChild(c){ el.children.push(c); }, classList:{ list:[], toggle(c,f){ if(f===undefined){ const i=el.classList.list.indexOf(c); i>=0?el.classList.list.splice(i,1):el.classList.list.push(c);} else { f?el.classList.list.push(c):el.classList.list.splice(el.classList.list.indexOf(c),1);} }, add(c){ if(!el.classList.list.includes(c)) el.classList.list.push(c); }, remove(c){ const i=el.classList.list.indexOf(c); if(i>=0)el.classList.list.splice(i,1); }, contains(c){return el.classList.list.includes(c);} },
+    appendChild(c){ el.children.push(c); }, classList:{ list:[], toggle(c,f){ const i=el.classList.list.indexOf(c); if(f===undefined){ i>=0?el.classList.list.splice(i,1):el.classList.list.push(c);} else if(f){ if(i<0) el.classList.list.push(c); } else { if(i>=0) el.classList.list.splice(i,1); } }, add(c){ if(!el.classList.list.includes(c)) el.classList.list.push(c); }, remove(c){ const i=el.classList.list.indexOf(c); if(i>=0)el.classList.list.splice(i,1); }, contains(c){return el.classList.list.includes(c);} },
     textContent:'', innerHTML:'', title:'', value:'', width:300, height:150,
     addEventListener(){}, removeEventListener(){}, focus(){}, setAttribute(){}, getAttribute(){return null;},
     getContext(){ return ctxStub; },
@@ -49,6 +49,7 @@ const DRIVER = `
 ;(async()=>{
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 try{
+  getProg().unlockAll = true;   // v5 渐进解锁：测试全量内容（等价设置页一键解锁）
   console.log('STEP1 开机：菜单显示 =', document.getElementById("menuScreen").style.display);
   pickRace('goblin');
   console.log('STEP2 选族完成：路线图 =', document.getElementById('campaignScreen').style.display);
