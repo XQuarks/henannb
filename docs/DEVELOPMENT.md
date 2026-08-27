@@ -92,12 +92,12 @@ index.html
 | AI | 暂停中自然冻结 | 运行但 `aiFrozen=true` 冻结决策 |
 
 - 事件源：endDrag→`send`、tryRecall→`recall`、doCast→`skill`、arriveBall 翻色→`capture{node}`。
-- 触发接线：launchBattle 按 `{2:'l2',3:'l3',5:'l5',6:'l6',7:'l7'}` 映射，仅限 `human && lastMode==='camp'` 且未完成；若本关有开场导演简报则轮询等 `dirBusy=false` 再挂载。
+- 触发接线：launchBattle 按 `{1:'l1',2:'l2',3:'l3',5:'l5',6:'l6',7:'l7'}` 映射，仅限 `human && lastMode==='camp'` 且未完成；若本关有开场导演简报则轮询等 `dirBusy=false` 再挂载。**L1/L2/L7 现已加开场导演简报（剧情渲染），故同样走"导演先讲、再进引导"**。
 - 完成标记 `prog.tut[key]`；`freezeGame()`（回菜单/开新局）会清 guide 与 aiFrozen。
 
 ## 6. 固定地图（seed）
 
-`mods.seed != null` 时 `MAP_RNG = mulberry32(seed)`，建图路径上所有随机（genSkeleton/rand/shuffleArr/capTiers）全部走 MAP_RNG → **同一设备同一视口下布局完全确定**。教学关 L2 使用 `SKEL.tutBridge {tpl:M3, mods:{seed:20260826}}`。
+`mods.seed != null` 时 `MAP_RNG = mulberry32(seed)`，建图路径上所有随机（genSkeleton/rand/shuffleArr/capTiers）全部走 MAP_RNG → **同一设备同一视口下布局完全确定**。教学关全部固定：L1 `teach`(seed)、L2 `tutBridge`(seed)、L3 `harvest`(seed)、L5 `fog`(seed)、L6 `pincer`(seed) 为各族独占骨架直加 seed；L7 因 `siege` 被四族 L7 共用，单独建 `tutSiege`（带 seed）供人类 L7 指向，避免误伤其他族。
 
 ---
 

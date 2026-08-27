@@ -38,7 +38,7 @@
     --ink:#f2f2ef; --ink-soft:#9a9a94; --ink-dim:#85827a;   /* ink-dim 对 #131418 ≥4.8:1，小字达 WCAG AA */
     --line:#2b2d30; --line-strong:#3e4147;
     --yel:#fffa00; --gold:#ffd23e;
-    --danger:#ff5a3c; --cyan:#35cfd4; --violet:#8e6fd8;
+    --danger:#ff5a3c; --cyan:#35cfd4; --mint:#00ffa2; --violet:#8e6fd8;
     /* 势力色：运行时由 start() 按种族写入 --fc1..3；玩家固定绿色 */
     --fc1:#3ddc68; --fc2:#ff6240; --fc3:#35cfd4;
     --shadow:0 10px 28px rgba(0,0,0,.5);
@@ -50,6 +50,7 @@
   html,body{margin:0; height:100%; background:var(--bg); color:var(--ink);
     font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; overflow:hidden;}
   canvas{display:block; touch-action:none;}
+  #cv{position:fixed; inset:0; z-index:0; display:none;}   /* 地图层脱离文档流，永远贴视口，避免流内元素引起重排；仅在战斗时显示 */
 
   /* ---------- 微标签 / 英文副标 ---------- */
   .hk{display:inline-block; margin-right:7px; padding:1px 5px; background:var(--yel); color:#111;
@@ -59,7 +60,7 @@
     text-transform:uppercase; margin:-4px 0 16px;}
 
   /* ---------- HUD 顶部指挥条 ---------- */
-  #hud{position:fixed; top:0; left:0; right:0; height:64px; display:flex; align-items:center;
+  #hud{position:fixed; top:0; left:0; right:0; height:64px; display:none; align-items:center;
     gap:14px; padding:0 16px; font-size:13px; border-bottom:1px solid var(--line);
     background:linear-gradient(180deg,rgba(14,15,17,.96),rgba(14,15,17,.88));
     backdrop-filter:blur(10px) saturate(1.1); z-index:10;
@@ -179,12 +180,16 @@
 
   /* ---------- 集结手柄 / 技能按钮（方形工业钮） ---------- */
   #rallyBtn{position:fixed; bottom:calc(84px + env(safe-area-inset-bottom,0px)); right:16px; z-index:15;
-    width:52px; height:52px; font-size:20px; line-height:1; cursor:grab;
-    border:1.5px solid var(--yel); background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
+    width:52px; height:52px; font-size:20px; line-height:1; cursor:grab; display:none;
+    border:none; background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
     color:var(--yel); box-shadow:0 4px 14px rgba(0,0,0,.5);
     transition:transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
     touch-action:none; -webkit-user-select:none; user-select:none;
     -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;}
+  #rallyBtn::before,#rallyBtn::after{content:''; position:absolute; width:14px; height:14px; pointer-events:none;}
+  #rallyBtn::before{top:0; left:0; border-top:1.5px solid var(--yel); border-left:1.5px solid var(--yel);}
+  #rallyBtn::after{bottom:0; right:0; border-bottom:1.5px solid var(--yel); border-right:1.5px solid var(--yel);}
+  #rallyBtn.rallying::before,#rallyBtn.rallying::after{border-color:#111;}
   #rallyBtn:hover{transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,.6), 0 0 12px rgba(255,250,0,.25);}
   #rallyBtn:active{cursor:grabbing;}
   #rallyBtn.rallying{transform:scale(1.22); z-index:60; cursor:grabbing;
@@ -200,22 +205,30 @@
   }
   #skillBtn{position:fixed; bottom:calc(84px + env(safe-area-inset-bottom,0px)); left:16px; z-index:15;
     width:52px; height:52px; font-size:20px; line-height:1; cursor:pointer;
-    border:1.5px solid var(--cyan); background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
-    color:var(--cyan); box-shadow:0 4px 14px rgba(0,0,0,.5); display:none;
+    border:none; background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
+    color:var(--mint); box-shadow:0 4px 14px rgba(0,0,0,.5); display:none;
     transition:transform .12s ease, box-shadow .12s ease;}
+  #skillBtn::before,#skillBtn::after{content:''; position:absolute; width:14px; height:14px; pointer-events:none;}
+  #skillBtn::before{top:0; left:0; border-top:1.5px solid var(--mint); border-left:1.5px solid var(--mint);}
+  #skillBtn::after{bottom:0; right:0; border-bottom:1.5px solid var(--mint); border-right:1.5px solid var(--mint);}
+  #skillBtn.aiming::before,#skillBtn.aiming::after{border-color:#0b1517;}
   #skillBtn:hover{transform:translateY(-2px);}
   #skillBtn.cooling{filter:grayscale(.9); opacity:.55; cursor:not-allowed;}
-  #skillBtn.aiming{transform:scale(1.2); background:var(--cyan); color:#0b1517;
-    box-shadow:0 10px 26px rgba(53,207,212,.35); z-index:60;}
+  #skillBtn.aiming{transform:scale(1.2); background:var(--mint); color:#0b1517;
+    box-shadow:0 10px 26px rgba(0,255,162,.35); z-index:60;}
   @media (max-width:560px){ #skillBtn{width:46px;height:46px;font-size:17px;bottom:calc(76px + env(safe-area-inset-bottom,0px));} }
   /* 半军切换钮（v5.1）：叠在技能钮上方，点亮=青底 */
   #halfBtn{position:fixed; bottom:calc(146px + env(safe-area-inset-bottom,0px)); left:16px; z-index:15;
     width:52px; height:52px; font-size:19px; line-height:1; cursor:pointer;
-    border:1.5px solid var(--cyan); background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
-    color:var(--cyan); box-shadow:0 4px 14px rgba(0,0,0,.5); display:none;
+    border:none; background:rgba(18,19,21,.92); backdrop-filter:blur(4px);
+    color:var(--mint); box-shadow:0 4px 14px rgba(0,0,0,.5); display:none;
     transition:transform .12s ease, box-shadow .12s ease;}
+  #halfBtn::before,#halfBtn::after{content:''; position:absolute; width:14px; height:14px; pointer-events:none;}
+  #halfBtn::before{top:0; left:0; border-top:1.5px solid var(--mint); border-left:1.5px solid var(--mint);}
+  #halfBtn::after{bottom:0; right:0; border-bottom:1.5px solid var(--mint); border-right:1.5px solid var(--mint);}
+  #halfBtn.on::before,#halfBtn.on::after{border-color:#0b1517;}
   #halfBtn:hover{transform:translateY(-2px);}
-  #halfBtn.on{background:var(--cyan); color:#0b1517; box-shadow:0 10px 26px rgba(53,207,212,.35);}
+  #halfBtn.on{background:var(--mint); color:#0b1517; box-shadow:0 10px 26px rgba(0,255,162,.35);}
   @media (max-width:560px){ #halfBtn{width:46px;height:46px;font-size:17px;bottom:calc(132px + env(safe-area-inset-bottom,0px));} }
 
   /* ---------- 引导对白卡（v5.1 导演式 NPC 教学，不暂停战斗） ---------- */
@@ -268,11 +281,15 @@
   #levelBrief .lb-card::after,#upgradeScreen .ug-card::after,#achScreen .ach-card::after{
     content:""; position:absolute; bottom:-1px; right:-1px; width:16px; height:16px;
     border-bottom:2px solid var(--yel); border-right:2px solid var(--yel); pointer-events:none;}
+  /* 弹窗磨砂玻璃：背景半透明 + backdrop-filter 模糊透出（dlg-box briefing 模式已被 .briefing .dlg-box{backdrop-filter:none!important} 覆盖） */
+  #menuScreen .ss-card,#factionSelect .fs-card,#skillSelect .fs-card,#levelBrief .lb-card,
+  #upgradeScreen .ug-card,#achScreen .ach-card,#campaignScreen .cp-wrap,
+  #banner .card{backdrop-filter:blur(4px) saturate(.95); -webkit-backdrop-filter:blur(4px) saturate(.95);}
 
   /* ---------- 结算横幅 ---------- */
   #banner{position:fixed; inset:0; display:none; flex-direction:column;
-    z-index:20; text-align:center; padding:24px; overflow:auto; animation:overlayFade .25s ease;}
-  #banner .card{margin:auto; padding:30px 44px; background:var(--panel); border:1px solid var(--line-strong);
+    z-index:20; text-align:center; padding:24px; overflow:auto; scrollbar-gutter:stable; animation:overlayFade .25s ease;}
+  #banner .card{margin:auto; padding:30px 44px; background:rgba(17,18,20,.75); border:1px solid var(--line-strong);
     max-width:480px; box-shadow:var(--shadow); animation:cardPop .4s cubic-bezier(.2,1.4,.4,1); position:relative; overflow:hidden;}
   #banner .card::before{content:""; position:absolute; top:0; left:0; right:0; height:6px;
     background:repeating-linear-gradient(45deg,var(--yel) 0 10px,#111214 10px 20px);}
@@ -328,9 +345,10 @@
 
   /* ---------- 主菜单 ---------- */
   #menuScreen{position:fixed; inset:0; display:none; flex-direction:column;
-    z-index:30; text-align:center; padding:32px 20px; overflow:auto; animation:overlayFade .3s ease;}
-  #menuScreen .ss-card{margin:auto; max-width:480px; width:100%; padding:34px 30px 28px;
-    background:rgba(17,18,20,.78); border:1px solid var(--line-strong); animation:cardPop .4s cubic-bezier(.2,1.3,.4,1);
+    z-index:30; text-align:center; padding:32px 20px; overflow:auto; scrollbar-gutter:stable;}
+  #menuScreen .ss-wrap{position:relative; max-width:480px; width:100%; margin:auto;}
+  #menuScreen .ss-card{padding:34px 30px 28px;
+    background:rgba(17,18,20,.75); border:1px solid var(--line-strong); animation:cardPop .4s cubic-bezier(.2,1.3,.4,1);
     position:relative;}
   #menuScreen .ss-deco{font-size:16px; letter-spacing:14px; margin-bottom:6px; color:var(--yel);}
   #menuScreen .ss-deco span{display:inline-block; animation:bob 2.4s ease-in-out infinite;}
@@ -369,7 +387,7 @@
   #menuScreen .ss-stats{display:flex; gap:18px; justify-content:center; margin-top:14px;
     font-size:11.5px; color:var(--ink-dim); font-family:var(--disp); letter-spacing:1px;}
   #menuScreen .ss-stats b{color:var(--ink); font-size:13px; font-variant-numeric:tabular-nums;}
-  /* 大屏两侧装饰：四族菱形 + 竖排英文（窄屏隐藏） */
+  /* 首页两侧装饰：四族菱形 + 竖排英文（宽屏可见） */
   .ss-flank{position:fixed; top:50%; transform:translateY(-50%); display:none;
     flex-direction:column; align-items:center; gap:12px; z-index:0; pointer-events:none;}
   .ss-flank i{width:9px; height:9px; transform:rotate(45deg); opacity:.5;
@@ -381,24 +399,42 @@
     .ss-fl-l{left:calc(50% - 340px);}
     .ss-fl-r{right:calc(50% - 340px);}
   }
+  /* 窄屏：横向放在弹窗下方80px，跟随弹窗居中，仅显示一个 */
+  @media(max-width:1079px){
+    .ss-flank.ss-fl-l{position:absolute; left:50%; transform:translateX(-50%); top:calc(100% + 80px); display:flex; flex-direction:row; justify-content:center; align-items:center; gap:10px; width:auto; pointer-events:none;}
+    .ss-flank span{writing-mode:horizontal-tb; font-family:var(--disp); font-size:10px; letter-spacing:8px; color:var(--ink-dim); opacity:.6; text-transform:uppercase;}
+    .ss-flank i{opacity:.5; box-shadow:0 0 8px rgba(255,255,255,.08);}
+    .ss-flank.ss-fl-r{display:none;}  /* 隐藏右侧那个 */
+  }
 
   /* ---------- 选族 / 选技能卡片 ---------- */
-  #factionSelect,#skillSelect{position:fixed; inset:0; display:none; z-index:36; padding:16px; overflow:auto; animation:overlayFade .25s ease;}
+  #factionSelect,#skillSelect{position:fixed; inset:0; display:none; z-index:36; padding:16px; overflow:auto; scrollbar-gutter:stable;}
   #skillSelect{z-index:37;}
   #factionSelect .fs-card,#skillSelect .fs-card{margin:auto; max-width:780px; width:100%; text-align:center;
-    padding:26px 24px 22px; background:rgba(17,18,20,.82); border:1px solid var(--line-strong);
+    padding:26px 24px 22px; background:rgba(17,18,20,.75); border:1px solid var(--line-strong);
     animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
   #skillSelect .fs-card{max-width:640px;}
-  /* ---------- 通用弹层背景：顶光 + 细网格 + 斜纹 + 暗角（选族/选技/关卡详情/路线图共用） ---------- */
+  /* ---------- 选族/选技/选关卡背景：复用主菜单(menuScreen)同款「暗色底 + 灰色等高线 + 流动绿光」 ---------- */
   #factionSelect,#skillSelect,#levelBrief,#campaignScreen{
     background:
-      radial-gradient(1100px 480px at 50% -10%, rgba(255,210,62,.07), transparent 62%),
-      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px),
-      repeating-linear-gradient(-45deg, rgba(255,255,255,.012) 0 2px, transparent 2px 11px),
-      linear-gradient(180deg,#15161a 0%, #0b0c0e 100%);
-    background-size:auto,32px 32px,32px 32px,auto,auto;
-    box-shadow:inset 0 0 140px rgba(0,0,0,.52);}
+      linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px) 0 0/52px 52px,
+      linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px) 0 0/52px 52px,
+      linear-gradient(180deg,#121317 0%, #0a0b0d 100%);
+    background-attachment:fixed;
+    background-color:#0c0d0f;}
+  /* 等高线层（8 屏 ::before，JS 启动时注入"山地地形"SVG 背景 + background-attachment:fixed 贴视口，
+     避免独立 fixed div 被屏的不透明背景盖住、也不会随屏内容滚动） */
+  #menuScreen::before,#upgradeScreen::before,#armoryScreen::before,#settingsScreen::before,
+  #factionSelect::before,#skillSelect::before,#levelBrief::before,#campaignScreen::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;}
+  /* 辉光层（与主页同款：绿/金/青三团大范围柔光，缓慢漂移呼吸 14s 往复） */
+  #factionSelect::after,#skillSelect::after,#levelBrief::after,#campaignScreen::after{
+    content:""; position:fixed; inset:-20%; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(900px 620px at 78% 18%, rgba(61,220,104,.22), transparent 64%),
+      radial-gradient(820px 600px at 16% 84%, rgba(255,210,62,.18), transparent 62%),
+      radial-gradient(760px 540px at 55% 52%, rgba(53,207,212,.12), transparent 65%);
+    filter:blur(28px);}
   #factionSelect h1,#skillSelect h1{font-family:var(--disp); font-size:25px; margin:0 0 6px; letter-spacing:2px;}
   #factionSelect .fs-sub,#skillSelect .fs-sub{margin:0 0 18px; color:var(--ink-soft); font-size:14px;}
   #factionSelect .fs-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
@@ -466,8 +502,8 @@
   /* ---------- 战役路线图 ---------- */
   #campaignScreen{position:fixed; inset:0; display:none;
     z-index:34; padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);
-    overflow:auto; animation:overlayFade .25s ease;}
-  #campaignScreen .cp-wrap{margin:auto; max-width:680px; width:100%; text-align:center; animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
+    overflow:auto; scrollbar-gutter:stable;}
+  #campaignScreen .cp-wrap{margin:auto; max-width:680px; width:100%; text-align:center; background:rgba(17,18,20,.75); animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
   #campaignScreen h1{font-size:26px; margin:0 0 4px; letter-spacing:1px; color:var(--ink);}
   #campaignScreen h1.cp-title{display:flex; align-items:center; justify-content:center; gap:10px;}
   #campaignScreen h1 .cp-crest{font-family:var(--disp); font-size:12px; font-weight:700; letter-spacing:2px;
@@ -508,10 +544,9 @@
   }
 
   /* ---------- 关卡详情 ---------- */
-  #levelBrief{position:fixed; inset:0; display:none; z-index:39; padding:16px; overflow:auto; animation:overlayFade .2s ease;}
+  #levelBrief{position:fixed; inset:0; display:none; z-index:39; padding:16px; overflow:auto; scrollbar-gutter:stable;}
   #levelBrief .lb-card{margin:auto; max-width:500px; width:100%;
-    background:linear-gradient(180deg,#17181d 0%,#101114 100%);
-    border:1px solid var(--line-strong); border-top:3px solid var(--fac-accent,var(--yel));
+    background:rgba(17,18,20,.75); border:1px solid var(--line-strong); border-top:3px solid var(--fac-accent,var(--yel));
     padding:24px 24px 18px; box-shadow:var(--shadow);
     animation:cardPop .3s cubic-bezier(.2,1.3,.4,1);}
   #levelBrief .lb-ch{font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:4px;
@@ -571,7 +606,7 @@
 
   /* ---------- NPC 对话场景 ---------- */
   #dialogueScene{position:fixed; inset:0; display:none; flex-direction:column; justify-content:flex-end;
-    z-index:38; overflow:hidden; animation:overlayFade .3s ease; cursor:pointer; user-select:none;}
+    z-index:38; overflow:hidden; cursor:pointer; user-select:none;}
   #dialogueScene .dlg-sky{position:absolute; inset:0; transition:background .4s ease;}
   /* on-map：剧情对话浮于战斗地图上——遮罩轻磨砂，透出身后战场 */
   #dialogueScene.on-map{backdrop-filter:blur(2.5px) saturate(.92); -webkit-backdrop-filter:blur(2.5px) saturate(.92);}
@@ -589,6 +624,13 @@
   #dialogueScene.multi .dlg-face{font-size:min(9vw,56px);}
   /* 客座（敌方）头像：种族色边框由 JS 内联写入，另加红色敌意辉光以区分阵营 */
   #dialogueScene .dlg-portrait.guest .dlg-face{box-shadow:0 10px 30px rgba(0,0,0,.55), 0 0 16px rgba(255,90,60,.22);}
+  /* 敌方（异族）对话：与玩家绿旗/人族蓝绿主题区分——对话框与头像框渲染敌意红辉光 */
+  #dialogueScene .dlg-box.enemy{box-shadow:0 0 18px rgba(255,60,60,.45), 0 10px 30px rgba(0,0,0,.5);}
+  #dialogueScene .dlg-box.enemy .dlg-name{background:#ff4d4d; color:#1a0606;}
+  #dialogueScene .dlg-box.enemy .dlg-text{color:#ffdede;}
+  #dialogueScene .dlg-portrait.guest.talking .dlg-face{border-color:#ff4d4d !important;
+    box-shadow:0 0 22px rgba(255,60,60,.85), 0 0 40px rgba(255,40,40,.4), 0 10px 30px rgba(0,0,0,.55);}
+  #dialogueScene .dlg-portrait.guest.talking .dlg-pname{color:#ff8a8a; text-shadow:0 0 8px rgba(255,60,60,.6);}
   #dialogueScene .dlg-portrait{display:flex; flex-direction:column; align-items:center; gap:8px;
     filter:saturate(.35) brightness(.72) grayscale(.4); transform:translateY(10px) scale(.92);
     transition:filter .25s ease, transform .25s ease;}
@@ -607,7 +649,7 @@
   #dialogueScene .dlg-chapter .ch-t{font-family:var(--disp); font-size:clamp(24px,5vw,36px); font-weight:700; letter-spacing:8px;
     color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.7);}
   #dialogueScene .dlg-box{position:relative; max-width:720px; width:calc(100% - 32px); margin:14px auto calc(20px + env(safe-area-inset-bottom,0px));
-    background:rgba(14,15,17,.94); backdrop-filter:blur(8px); border:1px solid var(--line-strong);
+    background:rgba(14,15,17,.6); backdrop-filter:blur(10px) saturate(.95); border:1px solid var(--line-strong);
     border-left:3px solid var(--fac-accent,var(--yel));
     padding:14px 18px 16px; min-height:110px; box-shadow:0 10px 30px rgba(0,0,0,.5); cursor:pointer;}
   #dialogueScene .dlg-box .dlg-name{position:absolute; top:-14px; left:16px; font-family:var(--disp); font-size:12px; font-weight:700;
@@ -639,20 +681,16 @@
   #aideCall .ac-text::after{content:'」'; color:var(--ink-dim);}
 
   /* ---------- 全屏页共用底（主菜单 / 军政厅 / 军械库）：暗色底 + 灰色等高线 + 流动辉光 ---------- */
-  #menuScreen,#upgradeScreen,#armoryScreen,#settingsScreen{position:fixed; inset:0; display:none; z-index:40; padding:16px; overflow:auto;
-    background:linear-gradient(180deg,#121317 0%, #0a0b0d 100%);
+  #menuScreen,#upgradeScreen,#armoryScreen,#settingsScreen{position:fixed; inset:0; display:none; z-index:40; padding:16px; overflow:auto; scrollbar-gutter:stable;
+    background:
+      linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px) 0 0/52px 52px,
+      linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px) 0 0/52px 52px,
+      linear-gradient(180deg,#121317 0%, #0a0b0d 100%);
     background-attachment:fixed;
     background-color:#0c0d0f;}
-  #menuScreen{z-index:30; display:none; flex-direction:column; text-align:center; animation:overlayFade .3s ease;
+  #menuScreen{z-index:30; display:none; flex-direction:column; text-align:center;
     padding:32px 20px;}
   /* 等高线层：默认细环兜底；启动时由 JS 注入程序生成的"山地地形"SVG 替换（平滑圆弧嵌套闭合曲线） */
-  #menuScreen::before,#upgradeScreen::before,#armoryScreen::before,#settingsScreen::before{
-    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
-    background:
-      repeating-radial-gradient(circle at 12% 20%, transparent 0 44px, rgba(255,255,255,.030) 44px 45px),
-      repeating-radial-gradient(circle at 86% 80%, transparent 0 58px, rgba(255,255,255,.024) 58px 59px);
-    -webkit-mask-image:radial-gradient(130% 105% at 50% 38%, #000 52%, transparent 98%);
-    mask-image:radial-gradient(130% 105% at 50% 38%, #000 52%, transparent 98%);}
   /* 辉光层：绿/金/青三团大范围柔光，缓慢漂移呼吸（14s 往复） */
   #menuScreen::after,#upgradeScreen::after,#armoryScreen::after,#settingsScreen::after{
     content:""; position:fixed; inset:-20%; pointer-events:none; z-index:0;
@@ -660,20 +698,15 @@
       radial-gradient(900px 620px at 78% 18%, rgba(61,220,104,.22), transparent 64%),
       radial-gradient(820px 600px at 16% 84%, rgba(255,210,62,.18), transparent 62%),
       radial-gradient(760px 540px at 55% 52%, rgba(53,207,212,.12), transparent 65%);
-    filter:blur(28px);
-    animation:auroraDrift 14s ease-in-out infinite alternate;}
-  @keyframes auroraDrift{
-    0%  {transform:translate3d(-2.5%,-1.5%,0) scale(1);    opacity:.85;}
-    45% {transform:translate3d(1.5%,2%,0)    scale(1.06);  opacity:1;}
-    100%{transform:translate3d(-1%,3%,0)     scale(1.02);  opacity:.92;}
-  }
-  #upgradeScreen .ug-card{margin:auto; max-width:720px; width:100%; background:rgba(17,18,20,.9);
+    filter:blur(28px);}
+  /* 光效呼吸（auroraDrift）已按黎总要求整体停用：辉光层为静态，界面尺寸彻底稳定 */
+  #upgradeScreen .ug-card{margin:auto; max-width:720px; width:100%; background:rgba(17,18,20,.75);
     border:1px solid var(--line-strong); padding:24px 22px 18px; box-shadow:var(--shadow);
     position:relative; z-index:1;
     animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
   /* 设置页（v5）：行式布局 + 一键解锁按钮 */
   #settingsScreen{display:none; text-align:center;}
-  #settingsScreen .ug-card{margin:auto; max-width:440px; width:100%; background:rgba(17,18,20,.92);
+  #settingsScreen .ug-card{margin:auto; max-width:440px; width:100%; background:rgba(17,18,20,.75);
     border:1px solid var(--line-strong); padding:26px 26px 20px; box-shadow:var(--shadow);
     position:relative; z-index:1;
     animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
@@ -826,7 +859,7 @@
     padding:3px 9px; border-radius:3px; letter-spacing:.5px;}
   .am-chip.dim{color:var(--ink-dim); background:none; border-color:var(--line);}
   .bp-inv{display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px;
-    align-content:flex-start; min-height:70px; max-height:320px; overflow:auto;
+    align-content:flex-start; min-height:70px; max-height:320px; overflow:auto; scrollbar-gutter:stable;
     border:1px dashed var(--line-strong); padding:10px;}
   .bp-card{display:flex; align-items:center; gap:8px; border:1px solid var(--line); background:#17181b;
     padding:8px 10px; text-align:left;}
@@ -850,7 +883,7 @@
   .eq-tag.t2{color:var(--yel); border-color:var(--yel);}
 
   /* ---------- 成就页 ---------- */
-  #achScreen{position:fixed; inset:0; display:none; z-index:36; padding:16px; overflow:auto; animation:overlayFade .25s ease;}
+  #achScreen{position:fixed; inset:0; display:none; z-index:36; padding:16px; overflow:auto; scrollbar-gutter:stable;}
   #achScreen .ach-card{margin:auto; max-width:560px; width:100%; padding:26px 22px; background:rgba(17,18,20,.86);
     border:1px solid var(--line-strong); box-shadow:var(--shadow); text-align:center;
     animation:cardPop .35s cubic-bezier(.2,1.3,.4,1);}
@@ -955,9 +988,17 @@
       scroll-behavior:auto !important;
     }
   }
+  /* ---------- 终末地 CMYK 印刷色条点缀：背景右下角三枚小方块（青/品红/黄） ---------- */
+  #cmykDock{position:fixed; bottom:40px; right:40px; z-index:50; display:flex; gap:5px; pointer-events:none; transition:opacity .25s ease;}
+  #cmykDock .cmyk{width:14px; height:14px; display:block; box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 1px 4px rgba(0,0,0,.4);}
+  #cmykDock .c{background:#00ffa2;}   /* 青 */
+  #cmykDock .m{background:#ff1aac;}   /* 品红 */
+  #cmykDock .y{background:#fffa00;}   /* 黄 */
+  body.in-battle #cmykDock{opacity:0;}   /* 战斗中隐藏 CMYK 色块 */
 </style>
 </head>
 <body>
+<div id="cmykDock" aria-hidden="true"><span class="cmyk c"></span><span class="cmyk m"></span><span class="cmyk y"></span></div>
 <div id="hud">
   <div class="camp player"><span class="name" id="pName">人类</span><div class="bar" id="pBar" role="progressbar" aria-label="我方占比" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="pFill"></div></div><span class="pct" id="pPct">0%</span></div>
   <div class="camp red"><span class="name" id="a1Name">哥布林</span><div class="bar" id="a1Bar" role="progressbar" aria-label="敌方一占比" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="a1Fill"></div></div><span class="pct" id="a1Pct">0%</span></div>
@@ -1048,28 +1089,29 @@
   </div>
 </div>
 <div id="menuScreen">
-  <div class="ss-card">
-    <span class="ss-goldchip ss-gold-corner">GIL <b id="ssGold">0</b></span>
-    <div class="ss-deco"><span>◤</span><span>◆</span><span>◢</span></div>
-    <div class="ss-icon">◆</div>
-    <h1>统一之路</h1>
-    <div class="en-sub">Road to Unification</div>
-    <p class="ss-sub">人类 · 哥布林 · 天龙人 · 矮人 —— 四族争霸，谁主大陆</p>
-    <button id="startBtn" class="ss-start">▶ 开始作战</button>
-    <div class="ss-grid">
-      <button id="ffaBtn" class="ss-cell"><b>⚔ 自由对战</b><small>三家混战 · 随机地图</small></button>
-      <button id="settingsBtn" class="ss-cell"><b>⚙ 设置</b><small>音量 · 解锁选项</small></button>
-      <button id="upgradeBtn" class="ss-cell"><b>▣ 军政厅</b><small>强化 · 操典 · 种族树</small></button>
-      <button id="armoryBtn" class="ss-cell"><b id="amLbl">◈ 军械库</b><small id="amHint">配装 · 背包 · 分解</small></button>
+  <div class="ss-wrap">
+    <div class="ss-card">
+      <span class="ss-goldchip ss-gold-corner">GIL <b id="ssGold">0</b></span>
+      <div class="ss-deco"><span>◤</span><span>◆</span><span>◢</span></div>
+      <div class="ss-icon">◆</div>
+      <h1>统一之路</h1>
+      <div class="en-sub">Road to Unification</div>
+      <p class="ss-sub">人类 · 哥布林 · 天龙人 · 矮人 —— 四族争霸，谁主大陆</p>
+      <button id="startBtn" class="ss-start">▶ 开始作战</button>
+      <div class="ss-grid">
+        <button id="ffaBtn" class="ss-cell"><b>⚔ 自由对战</b><small>三家混战 · 随机地图</small></button>
+        <button id="settingsBtn" class="ss-cell"><b>⚙ 设置</b><small>音量 · 解锁选项</small></button>
+        <button id="upgradeBtn" class="ss-cell"><b>▣ 军政厅</b><small>强化 · 操典 · 种族树</small></button>
+        <button id="armoryBtn" class="ss-cell"><b id="amLbl">◈ 军械库</b><small id="amHint">配装 · 背包 · 分解</small></button>
+      </div>
+      <div class="ss-stats" id="ssStats"></div>
+      <div class="ss-foot-row">
+        <button id="achBtn" class="ss-ach">★ 成就 <b id="achCnt">0/11</b></button>
+        <span class="ss-foot">按住节点拖向目标派兵 · 长按再拖 = 半军 · 胜局得金币与装备掉落</span>
+      </div>
     </div>
-    <div class="ss-stats" id="ssStats"></div>
-    <div class="ss-foot-row">
-      <button id="achBtn" class="ss-ach">★ 成就 <b id="achCnt">0/11</b></button>
-      <span class="ss-foot">按住节点拖向目标派兵 · 长按再拖 = 半军 · 胜局得金币与装备掉落</span>
-    </div>
+    <div class="ss-flank ss-fl-l" aria-hidden="true"><i style="background:#5b8bd0"></i><i style="background:#6aa84f"></i><i style="background:#d4af37"></i><i style="background:#b0623a"></i><span>Road to Unification</span></div>
   </div>
-  <!-- 大屏两侧装饰：四族菱形徽记 + 竖排英文（≥1080px 显示，纯装饰不可点） -->
-  <div class="ss-flank ss-fl-l" aria-hidden="true"><i style="background:#5b8bd0"></i><i style="background:#6aa84f"></i><i style="background:#d4af37"></i><i style="background:#b0623a"></i><span>Road to Unification</span></div>
   <div class="ss-flank ss-fl-r" aria-hidden="true"><span>Road to Unification</span><i style="background:#b0623a"></i><i style="background:#d4af37"></i><i style="background:#6aa84f"></i><i style="background:#5b8bd0"></i></div>
 </div>
 <script>try{document.getElementById("menuScreen").style.display="flex";}catch(e){}</script><!-- 保险丝：主脚本任何位置崩溃也不白屏 -->
@@ -2106,7 +2148,7 @@ function pickTemplate(){ const r=Math.random(); return r<0.30 ? 'M0' : (r<0.55 ?
 // ===DATA-BEGIN===
 // —— 机械骨架池（模板+修饰词组合；四族各自挑选编排）——
 const SKEL={
-  teach:   { tpl:'M0', mods:{}, info:'教学关 · 树状大陆' },
+  teach:   { tpl:'M0', mods:{seed:20260827}, info:'教学关 · 树状大陆（固定）' },
   bridge:  { tpl:'M3', mods:{}, info:'断桥地形 · 咽喉争夺' },
   camps6:  { tpl:'M0', mods:{camps:{archery:2,mage:2,rogue:2,siege:1}, towers:0}, info:'七座兵营 · 抢营定胜负' },
   noTower: { tpl:'M0', mods:{noTowers:true, camps:{archery:2,mage:2,rogue:2}}, info:'全场无箭塔 · 纯兵营对决' },
@@ -2115,21 +2157,22 @@ const SKEL={
   locust:  { tpl:'M0', mods:{eventFast:true}, info:'事件频发 · 混乱乱局' },
   ambush:  { tpl:'M0', mods:{aiPreNodes:2}, info:'敌方先占两片 · 逆风翻盘局' },
   siege:   { tpl:'M0', mods:{neutralPopMul:2, camps:{archery:1,mage:1,rogue:1,siege:1}}, info:'驻军 ×2 + 重械营 · 攻坚消耗战' },
+  tutSiege:{ tpl:'M0', mods:{seed:20260877, neutralPopMul:2, camps:{archery:1,mage:1,rogue:1,siege:1}}, info:'引导战场 · 重兵光复（固定）' },
   corridor:{ tpl:'M5', mods:{globalSpeed:1.35}, info:'狭长走廊 · 全场加速对攻' },
   pocket:  { tpl:'M2', mods:{lakeBig:true}, info:'空心三角 · 合围口袋阵' },
-  fog:     { tpl:'M0', mods:{fogPerm:true, camps:{archery:2}}, info:'浓雾常驻 · 远程削弱近战强' },
+  fog:     { tpl:'M0', mods:{seed:20260875, fogPerm:true, camps:{archery:2}}, info:'浓雾常驻 · 远程削弱近战强（固定）' },
   dualFoe: { tpl:'M3', mods:{}, info:'双同族敌军 · 快攻压力测试' },
   kings:   { tpl:'M0', mods:{aiSkillsForce:true, diffBoost:3}, info:'敌方强制技能 · 强度+3' },
   boss:    { tpl:'M2', mods:{boss:true}, info:'Boss 要塞 · 占领立即获胜' },
   // —— v4 剧情/机制新骨架 ——
-  pincer:   { tpl:'M0', mods:{pincer:true}, info:'腹背受敌 · 玩家居中南北夹击' },
+  pincer:   { tpl:'M0', mods:{seed:20260876, pincer:true}, info:'腹背受敌 · 玩家居中南北夹击（固定）' },
   holyHold: { tpl:'M0', mods:{centerTowers:1, holdNode:true, holdTime:45}, info:'坚守中央圣塔 45 秒 · 坚防守备战' },
   alliance: { tpl:'M2', mods:{ally:true, lakeBig:true, aiPreNodes:1}, info:'临时同盟 · 共敌破盟后反水' },
   regicide: { tpl:'M0', mods:{killWin:true, aiSkillsForce:true, diffBoost:2}, info:'斩首行动 · 攻占敌方王帐即胜' },
   toll:     { tpl:'M3', mods:{lootGoal:30}, info:'买路财 · 掠夺满 30 金币即胜' },
   heist:    { tpl:'M3', mods:{lootGoal:40}, info:'佣兵竞速 · 先抢到 40 金币' },
   // —— v4 种族专属机制关（只在该族战役中出现）——
-  harvest:  { tpl:'M0', mods:{eventFast:true, barns:3}, info:'人类专属 · 麦仓遍地 抢收乱局' },
+  harvest:  { tpl:'M0', mods:{seed:20260873, eventFast:true, barns:3}, info:'人类专属 · 麦仓遍地 抢收乱局（固定）' },
   trade:    { tpl:'M0', mods:{aiPreNodes:2, stalls:4}, info:'哥布林专属 · 富豪商路 货栈首占 8 金' },
   sanctum:  { tpl:'M2', mods:{sanctum:true, lakeBig:true}, info:'天龙专属 · 湖心龙神祭坛 八秒震慑清场' },
   forgewars:{ tpl:'M0', mods:{forge:true, aiPreNodes:2}, info:'矮人专属 · 符文熔炉 占领者全军强化' },
@@ -2157,9 +2200,18 @@ human:[
  {name:'烽火边境', skel:'teach', foes:['goblin','goblin'], brief:'哥布林劫掠者越境烧村，夺回每一寸被占的土地。',
     d:[[1,'陛下！哥布林劫掠者趁夜越境，烧了边境的麦田。'],[0,'他们以为人类是好拿捏的软柿子。'],[0,'格瑞姆元帅，传我军令——夺回每一寸被占的土地。'],[1,'遵命！按住村庄拖向目标即可出兵，把绿色旗帜插遍全岛！'],
        [2,'火把都点了——冲进村去！一件不留！'],[3,'别乱烧！先抢粮仓再烧屋子，这票的账才算得清！']],
+  dir:[
+   {at:0.8, who:1, focus:'base', zoom:1.6, label:'你的领地',
+    lines:[[1,'陛下，开战前先认清战场——画面上所有插着绿旗的建筑，都是您的领地。'],[0,'最大的那座是您的大本营，其余村镇也听从您的号令。'],[1,'记住这抹绿：是友非敌。下面让军师教您怎么从领地派兵出征。']]},
+  ],
   win:'边境的狼烟熄了，但这场战争才刚刚开始。'},
  {name:'渡口阻击', skel:'tutBridge', foes:['goblin','dragon'], brief:'敌联军先锋扑向白石渡口——守住桥头，就是守住国门。',
   d:[[0,'斥候来报，敌军先锋正扑向白石渡口。'],[1,'渡口只有一座石桥，谁守住桥头，谁就守住了国门。'],[0,'那么，让敌人一颗粒尘都过不来。出击！']],
+  dir:[
+   {at:0.8, who:1, focus:'base', zoom:1.7, label:'白石渡口 · 咽喉',
+    lines:[[1,'陛下，敌军先锋正扑向白石渡口——渡口只有一座石桥。'],
+           [0,'谁守住桥头，谁就守住了国门。让敌人一粒尘都过不来。出击！']]},
+  ],
   win:'石桥上堆满了敌军的兵器，渡口安然无恙。'},
  {name:'抢收麦季', skel:'harvest', foes:['goblin','dwarf'], brief:'三座大麦仓遍布全岛——抢在敌人前面收下粮仓，就是抢下整个收获季。',
    d:[[1,'又是收获季……他们专挑这时候来抢粮！'],[0,'抢走我们的麦子，就想饿垮我们的军队？'],[0,'全军出城，保卫粮仓！乱局之中，手快者得食。']],
@@ -2194,8 +2246,13 @@ human:[
     lines:[[1,'陛下请看——北面龙军、南面哥布林，我们被夹在正中间了。'],
            [0,'看清了。传令：站稳中线，等他们先露破绽。']]},
   ]},
- {name:'光复村镇', skel:'siege', foes:['dwarf','dragon'], brief:'沦陷村镇重兵驻守——一寸山河一寸血，逐一光复。',
+ {name:'光复村镇', skel:'tutSiege', foes:['dwarf','dragon'], brief:'沦陷村镇重兵驻守——一寸山河一寸血，逐一光复。',
   d:[[1,'光复的村镇都有重兵驻守，每一块都是硬骨头。'],[0,'一寸山河一寸血。慢慢啃，也要全部啃下来。'],[1,'中立村镇驻军翻倍，硬仗开始了，陛下。']],
+  dir:[
+   {at:0.8, who:1, focus:'base', zoom:1.6, label:'光复在即 · 硬仗',
+    lines:[[1,'陛下，沦陷的村镇都有重兵驻守，每一块都是硬骨头。'],
+           [0,'一寸山河一寸血。慢慢啃，也要全部光复——先从那把重锤开始。']]},
+  ],
   win:'旗帜重新升起，村民含泪迎接王师。'},
  {name:'围城打援', skel:'alliance', foes:['goblin','dragon'], brief:'与天龙人结盟围剿哥布林主力——但破敌之后，盟约还作数吗？',
    d:[[0,'哥布林主力龟缩在三角地带，硬啃代价太大。'],[1,'陛下，天龙人遣使来盟——愿意与我们两面合围，事成之后湖心归他们。'],[0,'先借他们的翅膀。记住：盟约只在敌人死前有效。全军出击！']],
@@ -4206,15 +4263,16 @@ function draw(){
         ctx.fillText('⚒ '+Math.floor(gGold[1]||0)+'/'+lootGoalN+' G', pb3.x, pb3.y-pb3.rad*2.05);
       }
     }
-    // 召回窗口指示（v5.1）：有可召回部队的出发村外圈青色倒计时弧 + ↺ 剩余秒数
+    // 召回窗口指示（v5.1）：有可召回部队的出发村「只包住房屋」的青色倒计时弧 + ↺ 剩余秒数
+    // 半径收到 n.rad*0.66（房屋本体半宽约 n.rad*0.52，此圈仅贴着房子，不再外扩成圈遮挡战场）
     for(const n of nodes){
       if(n.owner!==1 || !n.lastSquad) continue;
       const rw=recallWindow(), rem=rw-(gameTime-n.lastSquad.t);
       if(rem<=0) continue;
-      ctx.beginPath(); ctx.arc(n.x,n.y,n.rad*1.62,-Math.PI/2,-Math.PI/2+(rem/rw)*Math.PI*2);
-      ctx.lineWidth=3; ctx.strokeStyle='rgba(53,207,212,.9)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.rad*0.66,-Math.PI/2,-Math.PI/2+(rem/rw)*Math.PI*2);
+      ctx.lineWidth=2.5; ctx.strokeStyle='rgba(53,207,212,.9)'; ctx.stroke();
       ctx.font='bold 11px system-ui'; ctx.fillStyle='#35cfd4'; ctx.textAlign='center';
-      ctx.fillText('↺'+rem.toFixed(1), n.x, n.y-n.rad*1.95);
+      ctx.fillText('↺'+rem.toFixed(1), n.x, n.y-n.rad*0.86);
     }
     // 导演标注：脉冲双环 + 弹跳箭头 + 标签牌（dirT=真实时钟，暂停对白期间照常动画）
     for(const m of cineMarks){
@@ -6369,9 +6427,11 @@ function renderLootBox(){
 // ===================== 输入 v2（鼠标 + 触控统一 Pointer 事件）======================
 // 多指修复：拖拽状态按 pointerId 隔离（drags Map）——第二根手指可同时拖第二队兵，
 // 且不会再干扰/打断第一根手指的进行中拖拽（旧版单一 drag 对象会被覆盖）。
-// 长按半军（v5）：按住己方节点 ≥400ms 后再拖 = 只出一半兵力（留守更多，防反扑）。
-const HALF_MS = 400;
-const drags = new Map();   // pointerId → { from, pos, to, t0, half }
+// 长按半军（v5）：仅在「按住己方节点小范围内不动、达长按阈值」时才判定半军；
+// 一旦手指拖出小范围（离开建筑附近），即视为正常全军拖出，全程不再转为半军。
+const HALF_MS = 400;                 // 长按多久算"半军"（毫秒）
+const HALF_MOVE_TOL = 16;            // 小范围容差（CSS px）：超过即视为拖出，锁定全军
+const drags = new Map();   // pointerId → { from, pos, to, t0, startPos, half, dragOut }
 function nodeAt(x,y){ for(let i=nodes.length-1;i>=0;i--){ const n=nodes[i]; if(insidePoly({x,y}, n.poly)) return n; } return null; }
 // 命中容错（V11 移动端）：严格点在格内没命中时，找 10px 内最近的节点（小屏手指点选更宽松）
 function nodeAtNear(x,y,rad){
@@ -6393,7 +6453,7 @@ cv.addEventListener("pointerdown", e=>{
   if(skillAiming) return; // 技能瞄准态：按下不拖兵，抬起结算
   const p=getPos(e); const n=nodeAtNear(p.x,p.y,12);
   if(n && n.owner===1){
-    drags.set(e.pointerId, { from:n, pos:p, to:null, t0:performance.now(), half:false });
+    drags.set(e.pointerId, { from:n, pos:p, to:null, t0:performance.now(), startPos:p, half:false, dragOut:false });
     if(tut && tut.step===0){ tut.step=1; tutShow('很好！现在拖到附近的灰色中立地块上'); }
     guideEvent('touch');
   }
@@ -6404,7 +6464,11 @@ cv.addEventListener("pointermove", e=>{
   const d = drags.get(e.pointerId);
   if(d){
     d.pos=p; d.to=nodeAtNear(d.pos.x,d.pos.y,12);
-    if(!d.half && performance.now()-d.t0 >= HALF_MS){
+    const md = Math.hypot(p.x-d.startPos.x, p.y-d.startPos.y);
+    // 拖出小范围 → 已决定"全军拖出"，锁定不再转半军（即使之后停很久）
+    if(!d.dragOut && md > HALF_MOVE_TOL) d.dragOut = true;
+    // 仅当"小范围内不动 + 达长按阈值"时才点亮半军（长按期间若已拖出则不会触发）
+    if(!d.half && !d.dragOut && md <= HALF_MOVE_TOL && performance.now()-d.t0 >= HALF_MS){
       d.half = true;
       if(d.from.pop-(d.from.pending||0) >= 3){
         floatText(d.from.x, d.from.y-d.from.rad-14, '半军', '#35cfd4');
@@ -6671,32 +6735,37 @@ function tutBegin(){
 // 玩家边听边操作；引导期间 AI 冻结（aiFrozen），等玩家完成指定动作（wait 事件）后军师讲下一句。
 // 完成标记存 prog.tut[key]，每关引导只出现一次；设置页「一键解锁」不影响引导触发。
 const GUIDES = {
-  // L2 渡口阻击（固定桥图）：半军 + 召回
+  // L1 烽火边境：基础拖拽派兵——剧情锚点：绿旗领地=玩家、哥布林劫掠者越境烧村
+  l1:[
+    {txt:'脚下这片插着绿旗的，就是您的领地——最大的那座是您的大本营。现在练出兵：按住您的建筑，拖向地图上有敌方旗帜的村子，松手即派兵', focus:'base', label:'按住拖动出兵', wait:'send'},
+    {txt:'漂亮！兵线已经上路。把全岛旗帜都插成绿色，这一关就算赢了——边境的狼烟，由您亲手熄灭'},
+  ],
+  // L2 渡口阻击（固定桥图）：半军 + 召回——剧情锚点：白石渡口、唯一石桥、敌联军先锋
   l2:[
-    {txt:'指挥官，先练「半军」：点亮左下角 ½ 钮再拖向敌村，或按住基地约半秒再拖——这次只出一半兵力，另一半留守', focus:'base', label:'半军出击', wait:'send', chk:d=>!!(d&&d.half)},
-    {txt:'再学「召回」：先随手拖一队兵出去，然后立刻点一下出发的村子——部队马上掉头返航', focus:'base', label:'点村召回', wait:'recall'},
-    {txt:'干得漂亮！一半进攻、一半留守——白石渡口就交给你了'},
+    {txt:'格瑞姆元帅探过：白石渡口只有一座石桥，敌联军先锋正扑过来。先练「半军」——点亮左下角 ½ 钮再拖，或按住基地约半秒再拖：只派一半兵压上桥头，另一半留守大本营', focus:'base', label:'半军守桥', wait:'send', chk:d=>!!(d&&d.half)},
+    {txt:'先锋若被龙军截在桥头，别慌——立刻点一下出发的村子，部队马上掉头回防。谁也别落在敌阵里', focus:'base', label:'点村召回', wait:'recall'},
+    {txt:'桥头稳住了。这一仗，白石渡口就交给你守——谁也别想过来'},
   ],
-  // L3 抢收麦季：技能瞄准
+  // L3 抢收麦季：技能瞄准——剧情锚点：三座大麦仓、抢收乱局
   l3:[
-    {txt:'你出征前选的技能就在左下角 ✦ 钮里——冷却制，免费使用'},
-    {txt:'来，放一次看看：先点 ✦ 按钮；需要目标的话，再点一个目标', wait:'skill'},
-    {txt:'记住：技能威力大、冷却长——留给关键团战'},
+    {txt:'三座大麦仓金圈闪着——抢收季节，谁占粮仓谁养得起兵。你出征前挑的那招技能，正是这乱局里的杀手锏'},
+    {txt:'放一次看看：点左下角 ✦ 钮；要瞄准就再点个目标。趁乱麻利收下粮仓！', wait:'skill'},
+    {txt:'技能留着关键团战——麦子入仓，这季的仗就好打了'},
   ],
-  // L5 雾中渗透：兵营克制（弓箭手）
+  // L5 雾中渗透：兵营克制（弓箭手）——剧情锚点：浓雾封岛、远程被削三成
   l5:[
-    {txt:'金圈处是弓箭手兵营——派兵占领它，别让敌人抢了先', focus:'type:archery', label:'弓箭手兵营', wait:'capture', chk:d=>d.node.type==='archery'},
-    {txt:'弓手会在行军途中停下远程射击敌方兵线——克制行进中的大军，但血薄怕围殴'},
+    {txt:'浓雾封岛，弓手法师的眼睛都瞎了三成——但金圈的弓箭手兵营还在。占下它，至少我们手里攥着远程', focus:'type:archery', label:'弓箭手兵营', wait:'capture', chk:d=>d.node.type==='archery'},
+    {txt:'弓手会停在半路放冷箭，专克行军的大队；就是血薄，别让它们落单送死'},
   ],
-  // L6 两线告急：法师营解锁介绍
+  // L6 两线告急：法师营解锁介绍——剧情锚点：腹背受敌、南北对进
   l6:[
-    {txt:'新兵种解锁！紫圈是法师兵营——派兵占领它', focus:'type:mage', label:'法师营 · 新！', wait:'capture', chk:d=>d.node.type==='mage'},
-    {txt:'法师弹带溅射、命中敌城还能磨掉 1 驻军——攻坚好手，就是脆'},
+    {txt:'北面龙军、南面哥布林，我们从中间被夹住了！金圈是法师兵营——占下它，溅射弹雨能同时招呼两路敌兵', focus:'type:mage', label:'法师营 · 新！', wait:'capture', chk:d=>d.node.type==='mage'},
+    {txt:'法师弹带溅射，砸进敌群才划算；就是脆皮一个，占下后记得用半军护着点'},
   ],
-  // L7 光复村镇：重械营解锁介绍
+  // L7 光复村镇：重械营解锁介绍——剧情锚点：沦陷村镇重兵、一寸山河一寸血
   l7:[
-    {txt:'攻城重械营解锁了——派兵占领金圈里的它', focus:'type:siege', label:'重械营 · 新！', wait:'capture', chk:d=>d.node.type==='siege'},
-    {txt:'重械慢如牛但伤害高：对据点驻军杀伤 ×1.6——啃硬骨头的专用锤'},
+    {txt:'沦陷的村镇全是硬骨头、重兵把守——金圈的重械营，是啃硬骨头的锤子。先占下它', focus:'type:siege', label:'重械营 · 新！', wait:'capture', chk:d=>d.node.type==='siege'},
+    {txt:'重械慢，但对据点驻军杀伤 ×1.6——光复每一村都得靠它一点点磨。慢慢啃，全收回来'},
   ],
 };
 let guide=null;        // { key, i } 当前引导与步骤索引
@@ -6822,6 +6891,7 @@ function stageBattle(){
   fastWinShown=false; fastWinBtn.style.display="none";
   aideReset();                               // 副官战报状态清零（队列/冷却/存活跟踪）
   hideAllScreens();
+  document.getElementById("cv").style.display="block";   // 战斗地图层显示：剧情对话遮罩背后透出真实战场
   draw(); updateHUD();                       // 渲染一帧静态战场：剧情对话的半透明遮罩背后可见
   stagedReady=true;
 }
@@ -6830,12 +6900,18 @@ function stageBattle(){
 let stagedReady=false;
 function launchBattle(){
   stagedReady=false;
+  // 恢复战斗常驻元素显示（CSS 默认隐藏，避免菜单/切换时从屏下透出闪烁）
+  document.getElementById("hud").style.display="flex";
+  document.getElementById("cv").style.display="block";
+  document.getElementById("rallyBtn").style.display="block";
+  resize();   // HUD 恢复显示后重算地图可玩区上沿（加载时 HUD 隐藏 G_TOP 用兜底值）
   running=true; paused=false; startTime=performance.now(); lastTs=performance.now();
+  document.body.classList.add('in-battle');   // 进入战斗：隐藏 CMYK 色块
   dirTick();                                 // 开局导演剧本立即接管（开战即进导演模式，副官进场白因暂停自动延后）
   // 可操控引导触发（v5）：人类战役特定关卡的战术/兵种课（每项只教一次，prog.tut 记录）。
   // 若本关带开局导演简报（L3/L5/L6 的 at≤5 条目），等待简报播完（dirBusy 解除）再挂引导。
   if(lastMode==='camp' && factionOf[1]==='human'){
-    const gAt={2:'l2',3:'l3',5:'l5',6:'l6',7:'l7'}[campStage];
+    const gAt={1:'l1',2:'l2',3:'l3',5:'l5',6:'l6',7:'l7'}[campStage];
     if(gAt){
       const myStage=campStage;
       const tryGuide=()=>{
@@ -7050,6 +7126,7 @@ let bannerPrimary=null; // 结算主按钮行为（endGame 里按战局动态设
 // 从游戏内任意入口回菜单前：先冻结旧局（否则旧局还在背后跑，遮罩盖着也会继续战斗/出胜负）
 function freezeGame(){
   running=false; paused=false;
+  document.body.classList.remove('in-battle');   // 退出战斗回菜单：恢复 CMYK 色块
   finale=null;
   fastWinShown=false; fastWinBtn.style.display="none";
   tut=null; tutHide();
@@ -7057,6 +7134,11 @@ function freezeGame(){
   document.getElementById("pauseBtn").textContent="❚❚ 暂停";
   document.getElementById("pauseOverlay").style.display="none";
   const _bn=document.getElementById("banner"); _bn.style.display="none"; _bn.classList.remove('slow');
+  // 兜底隐藏战斗常驻元素（含 battleLogo）：防止屏 overlayFade 淡入期间战斗 UI 从底下透出闪烁
+  for(const _id of ['hud','cv','rallyBtn','skillBtn','halfBtn']){
+    const _e=document.getElementById(_id); if(_e) _e.style.display="none";
+  }
+  const _bl=document.getElementById('battleLogo'); if(_bl){ _bl.classList.remove('on'); _bl.style.display='none'; }
 }
 // —— 主菜单 ——
 function showMenu(){
@@ -7288,6 +7370,7 @@ function playBattleLogo(race, onDone){
       +'></span>';
   }
   document.getElementById('blPts').innerHTML=pts;
+  el.style.display='';   // 清可能由 freezeGame 设的行内 style，避免覆盖 .on 的 flex 显示（出征 logo 恢复）
   el.classList.remove('out');
   el.classList.add('on');
   Sfx.play('conquer');
@@ -7496,6 +7579,11 @@ function dlgNextLine(){
   }
   document.getElementById('dlgWho').textContent=npc?npc.name+' · '+npc.title:'—';
   document.getElementById('dlgMore').textContent='▼ 点击继续';
+  // 敌方台词：对话框 + 头像框切换为敌意红辉光（与玩家绿旗/人族蓝绿主题区分）
+  const isEnemy = !!(npc && npc.race && npc.race!==campRace);
+  const dlgBoxEl=document.getElementById('dlgBox');
+  dlgBoxEl.classList.toggle('enemy', isEnemy);
+  dlgBoxEl.style.setProperty('--fac-accent', isEnemy ? '#ff4d4d' : (FS_ACCENT[campRace]||'#5b8bd0'));
   // 打字机效果：可点击立即补全
   const el=document.getElementById('dlgText');
   el.textContent='';
@@ -8292,13 +8380,14 @@ window.addEventListener("blur", ()=>{
 document.getElementById("menuScreen").style.display="flex";
 try{ refreshMenuMeta(); }catch(err){ console.error('[boot refreshMenuMeta]', err); }
 // 程序生成"山地等高线"背景（固定种子伪随机 → 每次加载地形一致；零图片素材）
-// 平滑圆弧：低频谐波扰动采样控制点 → Catmull-Rom 转三次贝塞尔闭合样条，曲线圆润无折角
+// 有机等高线：噪声扭曲的同心闭合曲线，模拟真实地形图层层叠叠、自然起伏
 try{
   (function topoBG(){
-    if(!document.head) return;   // 极简环境兜底（无 head 则跳过装饰）
+    if(!document.head) return;
     let seed=20260825;
     const rnd=()=> (seed=(seed*16807)%2147483647)/2147483647;
     const W=1600, H=1000;
+
     // Catmull-Rom 样条 → 平滑闭合贝塞尔路径
     const smoothClosed=p=>{
       const n=p.length;
@@ -8311,37 +8400,165 @@ try{
       }
       return d+'Z';
     };
-    let paths='';
-    const hill=(cx,cy,baseR,rings,squash,rot)=>{
-      for(let r=rings; r>=1; r--){
-        const rad=baseR*r/rings;
-        const N=12;
-        const pts=[];
-        for(let i=0;i<N;i++){
-          const a=i/N*Math.PI*2 + rot + r*0.5;
-          // 只用低频谐波（2/3/5 次），振幅温和 → 圆弧状的有机轮廓，无折角
-          const wob=1
-            + 0.15*Math.sin(a*2 + r*1.1 + cx*0.011)
-            + 0.09*Math.sin(a*3 - r*0.8 + cy*0.017)
-            + 0.045*Math.sin(a*5 + r*1.7);
-          pts.push([cx+Math.cos(a)*rad*wob, cy+Math.sin(a)*rad*wob*squash]);
-        }
-        const d=smoothClosed(pts);
-        const alpha=(0.055+0.035*((rings-r)%2)).toFixed(3);   // 环线深浅交替，像真实地图的计曲线
-        paths+='<path d="'+d+'" fill="none" stroke="rgba(205,210,218,'+alpha+')" stroke-width="1.2"/>';
-        if((rings-r)%2===1) paths+='<path d="'+d+'" fill="rgba(255,255,255,0.013)" stroke="none"/>';
+
+    // 域扭曲噪声：坐标先经噪声偏移再采样 → 打破网格规则性
+    const fbm=(x,y,octaves=5, gain=0.5, lacunarity=2.1)=>{
+      let v=0, amp=1, freq=0.006, sum=0;
+      for(let o=0;o<octaves;o++){
+        const nx=x*freq, ny=y*freq;
+        v+=amp*(Math.sin(nx*1.3+ny*0.7)*Math.cos(nx*0.5-ny*1.1)
+             +Math.sin(nx*0.8+ny*1.9)*Math.cos(nx*1.7-ny*0.3))*0.5;
+        sum+=amp; freq*=lacunarity; amp*=gain;
       }
+      return v/sum;
     };
-    hill(300,250,330,7,0.74,rnd()*6.28);
-    hill(1290,720,380,8,0.70,rnd()*6.28);
-    hill(930,160,230,5,0.80,rnd()*6.28);
-    hill(540,850,280,6,0.66,rnd()*6.28);
-    hill(1120,420,150,4,0.90,rnd()*6.28);
-    const uri='url("data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid slice">'+paths+'</svg>')+'")';
+    // 高频细节噪声：专门打破大面积平坦区的直线感
+    const detail=(x,y)=>{
+      return Math.sin(x*0.087+y*0.053)*Math.cos(x*0.041-y*0.097)*0.5
+           +Math.sin(x*0.131-y*0.071)*Math.cos(x*0.059+y*0.113)*0.3
+           +Math.sin(x*0.217+y*0.163)*0.2;
+    };
+    const warp=(x,y, scale=75)=>{
+      const wx=x + fbm(x,y,4,0.5,2.0)*scale + detail(x,y)*8;
+      const wy=y + fbm(x+1337,y+2999,4,0.5,2.0)*scale + detail(x+4093,y+8191)*8;
+      return [wx,wy];
+    };
+    const terrain=(x,y)=>{
+      const [wx,wy]=warp(x,y, 65);
+      // 多峰值场 + 全局起伏 + 高频细节
+      let h=0.42 + fbm(wx,wy,7,0.55,2.0)*0.38 + detail(wx,wy)*0.08;
+      const peaks=[
+        {x:430,y:250,a:1.25,s:250},
+        {x:1270,y:740,a:1.05,s:290},
+        {x:910,y:180,a:0.80,s:200},
+        {x:560,y:830,a:0.70,s:240},
+        {x:170,y:760,a:-0.60,s:180},
+        {x:1120,y:330,a:-0.52,s:210}];
+      for(const p of peaks){
+        const dx=wx-p.x, dy=wy-p.y;
+        h+=p.a*Math.exp(-(dx*dx+dy*dy)/(p.s*p.s));
+      }
+      return h;
+    };
+
+    // 沿角度采样等值线：从种子点出发沿梯度方向行进，构建闭合回路
+    function traceContour(cx,cy, level, step=1.8, maxPts=600){
+      const pts=[], visited=new Set();
+      let x=cx, y=cy;
+      for(let i=0;i<maxPts;i++){
+        const key=Math.round(x*10)+','+Math.round(y*10);
+        if(visited.has(key)) break;
+        visited.add(key);
+        pts.push([x,y]);
+        // 梯度（中心差分）
+        const eps=1.2;
+        const h=terrain(x,y);
+        const hx=terrain(x+eps,y)-terrain(x-eps,y);
+        const hy=terrain(x,y+eps)-terrain(x,y-eps);
+        const glen=Math.hypot(hx,hy)||1;
+        // 沿等值线切线方向前进（梯度旋转 90°）
+        const tx=-hy/glen, ty=hx/glen;
+        // 预测-校正：先按切线走，再用牛顿法拉回等值线
+        let nx=x+tx*step, ny=y+ty*step;
+        for(let it=0;it<5;it++){
+          const err=terrain(nx,ny)-level;
+          const gx=terrain(nx+eps,ny)-terrain(nx-eps,ny);
+          const gy=terrain(nx,ny+eps)-terrain(nx,ny-eps);
+          const gl=Math.hypot(gx,gy)||1;
+          nx-=err*gx/(gl*gl); ny-=err*gy/(gl*gl);
+        }
+        if(Math.hypot(nx-cx,ny-cy)<step*0.6 && i>30) break; // 回到起点
+        x=nx; y=ny;
+      }
+      // 后处理：剔除近似共线的中间点，保留转折 → 消除微小直段
+      if(pts.length<30) return null;
+      const filtered=[pts[0]];
+      for(let i=1;i<pts.length-1;i++){
+        const a=pts[i-1], b=pts[i], c=pts[i+1];
+        const dx1=b[0]-a[0], dy1=b[1]-a[1];
+        const dx2=c[0]-b[0], dy2=c[1]-b[1];
+        const len1=Math.hypot(dx1,dy1), len2=Math.hypot(dx2,dy2);
+        const cos=(dx1*dx2+dy1*dy2)/(len1*len2+1e-6);
+        if(cos<0.9995 || len1<0.5) filtered.push(b); // 夹角 > ~1.8° 或极短段保留
+      }
+      filtered.push(pts[pts.length-1]);
+      return filtered.length>25 ? filtered : null;
+    }
+
+    // 寻找局部极值点作为等高线种子
+    function findSeeds(threshold, count){
+      const seeds=[];
+      const step=24;
+      for(let y=step;y<H-step;y+=step){
+        for(let x=step;x<W-step;x+=step){
+          const h=terrain(x,y);
+          if(Math.abs(h-threshold)<0.025){
+            // 加入微小抖动避免网格对齐
+            const jx=x + (Math.sin(x*7.3+y*3.1)*3.7);
+            const jy=y + (Math.cos(x*5.9-y*4.7)*3.7);
+            // 简单去重
+            let dup=false;
+            for(const s of seeds) if(Math.hypot(s[0]-jx,s[1]-jy)<55){ dup=true; break; }
+            if(!dup) seeds.push([jx,jy]);
+          }
+        }
+      }
+      return seeds.slice(0,count);
+    }
+
+    let paths='';
+    const LEVELS=12;
+    // 计算场值范围
+    let hmin=Infinity, hmax=-Infinity;
+    for(let y=0;y<H;y+=16) for(let x=0;x<W;x+=16){
+      const h=terrain(x,y);
+      if(h<hmin) hmin=h; if(h>hmax) hmax=h;
+    }
+
+    for(let li=0;li<LEVELS;li++){
+      const level=hmin+(hmax-hmin)*(li+0.5)/LEVELS;
+      const seeds=findSeeds(level, 8);
+      for(const [sx,sy] of seeds){
+        const poly=traceContour(sx,sy,level);
+        if(!poly) continue;
+        // 去除过小/过大回路
+        let area=0; for(let i=0;i<poly.length;i++){
+          const [x1,y1]=poly[i], [x2,y2]=poly[(i+1)%poly.length];
+          area+=x1*y2-x2*y1;
+        }
+        if(Math.abs(area)<120 || Math.abs(area)>W*H*0.35) continue;
+        const d=smoothClosed(poly);
+        const major=(li%3===0);
+        const alpha=major?0.28:0.10, sw=major?1.8:0.7;
+        paths+='<path d="'+d+'" fill="none" stroke="rgba(200,220,240,'+alpha+')" stroke-width="'+sw+'"/>';
+        if(major) paths+='<path d="'+d+'" fill="rgba(255,255,255,0.012)" stroke="none"/>';
+      }
+    }
+
+    // 标高标注
+    let bxi=0,byi=0,bv=-Infinity;
+    for(let y=40;y<H-40;y+=40) for(let x=40;x<W-40;x+=40){
+      const h=terrain(x,y);
+      if(h>bv){ bv=h; bxi=x; byi=y; }
+    }
+    const elev=Math.round((bv-hmin)/(hmax-hmin)*900+150);
+    paths+='<path d="M'+(bxi-15)+','+byi+' H'+(bxi-5)+' M'+(bxi+5)+','+byi+' H'+(bxi+15)+'" stroke="rgba(140,200,235,0.5)" stroke-width="1"/>';
+    paths+='<path d="M'+bxi+','+(byi-15)+' V'+(byi-5)+' M'+bxi+','+(byi+5)+' V'+(byi+15)+'" stroke="rgba(140,200,235,0.5)" stroke-width="1"/>';
+    paths+='<text x="'+(bxi+20)+'" y="'+(byi-20)+'" fill="rgba(140,200,235,0.7)" font-family="monospace" font-size="12" letter-spacing="1">'+String(elev).padStart(4,'0')+'</text>';
+
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid slice">'
+      +'<defs><filter id="efglow" x="-30%" y="-30%" width="160%" height="160%">'
+      +'<feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#8cd4ff" flood-opacity="0.7"/>'
+      +'<feDropShadow dx="0" dy="0" stdDeviation="3.5" flood-color="#3a9fd9" flood-opacity="0.2"/>'
+      +'</filter></defs>'
+      +'<g filter="url(#efglow)">'+paths+'</g></svg>';
+    const uri='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';
     const st=document.createElement('style');
-    st.textContent='#menuScreen::before,#upgradeScreen::before,#armoryScreen::before{'
+    st.textContent='#menuScreen::before,#upgradeScreen::before,#armoryScreen::before,'
+      +'#factionSelect::before,#skillSelect::before,#levelBrief::before,#campaignScreen::before,#settingsScreen::before{'
       +'background-image:'+uri+';'
-      +'background-repeat:no-repeat;background-position:center;background-size:cover;}';
+      +'background-repeat:no-repeat;background-position:center;background-size:cover;'
+      +'background-attachment:fixed;}';
     document.head.appendChild(st);
   })();
 }catch(err){ console.error('[topoBG]', err); }

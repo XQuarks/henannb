@@ -8,7 +8,7 @@
 
 ## 运行方式
 
-1. 双击 `index.html`（或拖进任意现代浏览器）即可开局，**无需安装任何东西、无需联网**。
+1. 双击 `src/index.html`（或拖进任意现代浏览器）即可开局，**无需安装任何东西、无需联网**。
 2. 手机：把文件发到手机浏览器打开，或用本地静态服务器托管后访问。
 3. 所有进度存于浏览器 `localStorage`，换设备/清缓存会丢失。
 
@@ -29,31 +29,51 @@
 
 | 文档 | 内容 | 读者 |
 |------|------|------|
-| `GAMEPLAY.md` | 完整玩法说明：核心循环、四族/16 兵种、技能装备、战役与解锁线、全部胜利条件 | 玩家 / 策划 |
-| `DEVELOPMENT.md` | 代码架构导览（含行号锚点）、数据表位置、存档结构、测试体系、修改惯例 | 开发者 |
+| `docs/GAMEPLAY.md` | 完整玩法说明：核心循环、四族/16 兵种、技能装备、战役与解锁线、全部胜利条件 | 玩家 / 策划 |
+| `docs/DEVELOPMENT.md` | 代码架构导览（含行号锚点）、数据表位置、存档结构、测试体系、修改惯例 | 开发者 |
+
+## 存档系统
+
+游戏使用 `localStorage` 自动存档（键：`rtu_prog_v1`），包含：
+
+- **金币** 与通用养成（hp/atk/rate/prod/cap/start/move）
+- **四族技能树** 节点等级
+- **装备背包** 与穿戴槽（6 格）
+- **战役进度** 每族独立（1-10 关），首通自动解锁下一关并给奖励
+- **成就**、**跨局统计**（胜场/击杀/连胜）、**教程进度**
+- **音量/音乐** 设置
+
+> ⚠️ 清除浏览器数据、隐私模式、换设备会导致存档丢失。
 
 ## 文件清单
 
 ```
-index.html            全部游戏本体（HTML+CSS+JS 单文件）
-e2e-v5.js             v5 新功能专项测试（解锁/半军/绝地反击/引导/固定图）
-e2e-flow.js           开机→选族→选关→开战 全链路冒烟
-e2e-camp.js           战斗结算语义回归（同盟/同族/索敌/AI）
-e2e-director.js       导演剧本/修饰词/种族专属建筑 回归
-e2e-tree.js           养成树/装备/技能数值 回归
-e2e-draft.js          选族/技能选择 UI 流程 回归
-test-gold-smoke.js    金币经济/军械库/演出 冒烟
-check-ids.js 等        DOM 引用完整性检查
-index.backup-*.html   历次改版前快照（回滚用，命名 index.backup-日期-pN.html）
+src/index.html        全部游戏本体（HTML+CSS+JS 单文件）
+tests/e2e-v5.js       v5 新功能专项测试（解锁/半军/绝地反击/引导/固定图）
+tests/e2e-flow.js     开机→选族→选关→开战 全链路冒烟
+tests/e2e-camp.js     战斗结算语义回归（同盟/同族/索敌/AI）
+tests/e2e-director.js 导演剧本/修饰词/种族专属建筑 回归
+tests/e2e-tree.js     养成树/装备/技能数值 回归
+tests/e2e-draft.js    选族/技能选择 UI 流程 回归
+tests/test-gold-smoke.js 金币经济/军械库/演出 冒烟
+tests/check-*.js      DOM 引用完整性检查
+archive/              历次改版快照（回滚用）
+docs/                 文档目录
 ```
 
 ## 测试
 
 ```bash
-node e2e-v5.js        # 改动核心玩法后必跑
-node e2e-flow.js      # 改动流程/UI 后必跑
-node e2e-director.js  # 改动地图生成/剧情机制后必跑
-node --check <提取的js> # 或直接跑任一 e2e（内部会先 eval 整个脚本）
+node tests/e2e-v5.js        # 改动核心玩法后必跑
+node tests/e2e-flow.js      # 改动流程/UI 后必跑
+node tests/e2e-director.js  # 改动地图生成/剧情机制后必跑
+node --check <提取的js>      # 或直接跑任一 e2e（内部会先 eval 整个脚本）
 ```
 
 全绿标准：`RESULT fail=0` / `ALL PASS` / `ALL OK`。
+
+## 快速开始开发
+
+1. 用浏览器直接打开 `src/index.html`
+2. 修改代码后刷新即可验证
+3. 控制台可直接调用内部函数（如 `getProg()` 查看存档、`saveCampaign('human',5)` 解锁关卡）

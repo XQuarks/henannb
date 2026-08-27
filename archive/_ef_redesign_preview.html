@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>统一之路 · 终末地工业风 美术改版预览</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ===== 终末地官网真实色板（来自 CSS 抓取统计） ===== */
+  --bg:#191919; --bg2:#131315; --panel:#1f1f22; --panel2:#232529;
+  --ink:#f2f2f2; --ink-soft:#b3b3b3; --ink-dim:#7c7c7c;
+  --line:#35373c; --line-strong:#4d4d4d;            /* 冷灰描边，带蓝紫倾向 */
+  --yel:#fffa00; --gold:#ffcc1a;                     /* 签名柠檬黄 */
+  --mint:#00ffa2;                                    /* 官网真实青绿强调（替代旧 #35cfd4） */
+  --mag:#ff1aac; --blue:#007aff;                     /* CMYK 色条：品红 / 蓝 */
+  --danger:#ff5a3c;
+  --fc1:#00ffa2; --fc2:#ff6240; --fc3:#35cfd4;       /* 势力色：玩家=薄荷绿 */
+  --disp:'Chakra Petch','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --sat:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--disp);}
+body{
+  padding:calc(var(--sat) + 22px) 18px 60px;
+  /* CAD 坐标系直线背景 + 方形网格（终末地母题） */
+  background-image:
+    repeating-linear-gradient(0deg,transparent 0 39px,rgba(53,55,60,.22) 39px 40px),
+    repeating-linear-gradient(90deg,transparent 0 39px,rgba(53,55,60,.22) 39px 40px),
+    radial-gradient(900px 500px at 80% -10%,rgba(0,255,162,.06),transparent 60%),
+    linear-gradient(180deg,#191919,#131315);
+  background-attachment:fixed;
+  min-height:100vh;
+}
+.wrap{max-width:920px;margin:0 auto;}
+/* 英文微标 */
+.en-sub{font-size:11px;font-weight:600;letter-spacing:.42em;color:var(--yel);text-transform:uppercase;margin:-2px 0 14px;}
+.hk{display:inline-block;margin-right:7px;padding:1px 6px;background:var(--yel);color:#111;font-weight:700;font-size:9px;letter-spacing:1.5px;vertical-align:1px;}
+section{margin:30px 0;}
+h2{font-size:19px;font-weight:700;letter-spacing:2px;display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+h2::before{content:"";width:4px;height:20px;background:var(--yel);display:inline-block;}
+.note{color:var(--ink-dim);font-size:12.5px;line-height:1.7;margin:6px 0 14px;}
+
+/* ===== 顶部标题 ===== */
+.brand{padding:18px 0 8px;}
+.brand .cn{font-size:30px;font-weight:700;letter-spacing:8px;}
+.brand .en{font-size:12px;letter-spacing:.5em;color:var(--ink-soft);margin-top:6px;}
+
+/* ===== 配色板 ===== */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;}
+.sw{height:74px;border:1px solid var(--line);position:relative;display:flex;align-items:flex-end;padding:7px;font-size:10px;font-weight:600;letter-spacing:.5px;}
+.sw span{background:rgba(0,0,0,.55);padding:2px 5px;color:#fff;}
+.sw .role{position:absolute;top:6px;left:7px;font-size:9px;color:var(--ink-soft);letter-spacing:1px;}
+
+/* ===== CMYK 色条（招牌母题） ===== */
+.cmyk{height:6px;border:1px solid var(--line);
+  background:linear-gradient(90deg,var(--mint) 0 33.33%,var(--mag) 33.33% 66.66%,var(--yel) 66.66% 100%);}
+.cmyk-label{font-size:10px;color:var(--ink-dim);letter-spacing:2px;margin-top:6px;}
+
+/* ===== 方形卡片 + 切角按钮 ===== */
+.card{border:1px solid var(--line);background:var(--panel);position:relative;overflow:hidden;}
+.card .cmyk{position:absolute;top:0;left:0;right:0;}
+.cut{clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));}
+
+.btn{font-family:var(--disp);font-weight:700;letter-spacing:2px;font-size:13px;
+  padding:11px 22px;border:none;cursor:pointer;color:#111;background:var(--yel);}
+.btn.sec{background:transparent;color:var(--ink);border:1px solid var(--line-strong);}
+.btn.danger{background:var(--danger);color:#fff;}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;}
+
+/* 关卡卡 */
+.lvcard{width:200px;border:1px solid var(--line);background:var(--panel);padding:14px 14px 12px;position:relative;overflow:hidden;
+  background-image:repeating-linear-gradient(0deg,transparent 0 27px,rgba(255,255,255,.025) 27px 28px),
+    repeating-linear-gradient(90deg,transparent 0 27px,rgba(255,255,255,.025) 27px 28px);}
+.lvcard.sel{border-color:var(--mint);box-shadow:0 0 0 1px var(--mint),0 0 18px rgba(0,255,162,.18);}
+.lvcard .tag{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--yel);}
+.lvcard .t{font-size:16px;font-weight:700;letter-spacing:2px;margin:8px 0 6px;}
+.lvcard .d{font-size:11.5px;color:var(--ink-soft);line-height:1.6;min-height:42px;}
+.lvcard .meta{font-size:10px;color:var(--ink-dim);letter-spacing:1px;margin-top:8px;display:flex;justify-content:space-between;}
+
+/* HUD 指挥条 */
+.hud{border:1px solid var(--line);background:var(--panel);padding:12px 14px;box-shadow:inset 0 -2px 0 var(--yel);}
+.hud .camp{display:flex;align-items:center;gap:10px;margin:7px 0;}
+.hud .name{font-weight:700;font-size:11px;letter-spacing:1px;width:64px;flex-shrink:0;color:var(--ink-soft);}
+.hud .name.me{color:var(--mint);}
+.hud .bar{flex:1;height:10px;background:#0e0f11;border:1px solid var(--line-strong);overflow:hidden;}
+.hud .fill{height:100%;}
+.hud .pct{font-variant-numeric:tabular-nums;font-weight:700;font-size:12px;width:42px;text-align:left;}
+
+/* 公告面板（仿官网 #notice） */
+.notice{display:grid;grid-template-columns:200px 1fr;border:1px solid var(--line);background:var(--panel);min-height:200px;}
+.notice .list{border-right:1px solid var(--line);}
+.notice .item{padding:13px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;letter-spacing:.5px;color:var(--ink-soft);position:relative;}
+.notice .item.on{color:var(--ink);background:rgba(255,250,0,.06);}
+.notice .item.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--yel);}
+.notice .item .dt{font-size:10px;color:var(--ink-dim);letter-spacing:1px;margin-top:3px;}
+.notice .detail{padding:18px;position:relative;}
+.notice .detail h3{font-size:16px;letter-spacing:2px;margin-bottom:10px;}
+.notice .detail p{font-size:12.5px;color:var(--ink-soft);line-height:1.9;}
+.notice .detail .cmyk{position:absolute;left:0;top:0;}
+
+/* 总结清单 */
+.checklist{font-size:13px;line-height:2;color:var(--ink-soft);}
+.checklist b{color:var(--ink);}
+.checklist .add{color:var(--mint);font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand">
+    <div class="cn">统一之路</div>
+    <div class="en">ROAD TO UNIFICATION · ENDFIELD INDUSTRIES SKIN</div>
+  </div>
+  <div class="cmyk"></div>
+
+  <!-- 配色 -->
+  <section>
+    <h2><span class="hk">PAL</span>配色系统（官网真实值）</h2>
+    <div class="en-sub">Official Color System</div>
+    <div class="swatches">
+      <div class="sw" style="background:#191919"><span class="role">BG</span><span>#191919</span></div>
+      <div class="sw" style="background:#fffa00;color:#111"><span class="role">YEL</span><span>#fffa00 签名黄</span></div>
+      <div class="sw" style="background:#00ffa2;color:#111"><span class="role">MINT</span><span>#00ffa2 青绿</span></div>
+      <div class="sw" style="background:#35373c"><span class="role">LINE</span><span>#35373c 冷灰</span></div>
+      <div class="sw" style="background:#1f1f22"><span class="role">PANEL</span><span>#1f1f22</span></div>
+      <div class="sw" style="background:#f2f2f2;color:#111"><span class="role">INK</span><span>#f2f2f2</span></div>
+      <div class="sw" style="background:#ff1aac;color:#111"><span class="role">MAG</span><span>#ff1aac 品红</span></div>
+      <div class="sw" style="background:#007aff;color:#fff"><span class="role">BLUE</span><span>#007aff</span></div>
+      <div class="sw" style="background:#ff5a3c;color:#fff"><span class="role">DANGER</span><span>#ff5a3c</span></div>
+    </div>
+    <div class="cmyk" style="margin-top:14px"></div>
+    <div class="cmyk-label">▲ CMYK 印刷测试色条 — 终末地招牌母题（青/品红/黄），用于卡片顶边、面板分隔</div>
+  </section>
+
+  <!-- 母题 -->
+  <section>
+    <h2><span class="hk">MOT</span>标志性母题</h2>
+    <div class="en-sub">Signature Motifs</div>
+    <div class="note">
+      ① <b>方形语言</b>：卡片/面板一律硬方体（radius 0）+ 切角按钮，弱化圆角。<br>
+      ② <b>CMYK 色条</b>：卡片顶边、面板分隔处嵌三色印刷条。<br>
+      ③ <b>CAD 坐标系</b>：背景淡直线网格，营造工业数模界面感（本页背景即此）。<br>
+      ④ <b>薄荷绿高亮</b>：交互/选中态用 <code>#00ffa2</code> 替代旧青蓝。<br>
+      ⑤ <b>冷灰描边</b>：<code>#35373c</code> 比旧 <code>#2b2d30</code> 更冷、更金属。
+    </div>
+  </section>
+
+  <!-- 组件 -->
+  <section>
+    <h2><span class="hk">UI</span>组件预览</h2>
+    <div class="en-sub">Component Preview</div>
+
+    <div class="note">主按钮（硬切角 · 签名黄）／次按钮（方形描边）／危险按钮：</div>
+    <div class="row">
+      <button class="btn cut">开始征战</button>
+      <button class="btn sec cut">选择阵营</button>
+      <button class="btn danger cut">删除存档</button>
+    </div>
+
+    <div class="note" style="margin-top:22px">关卡卡片（方形 + 顶边 CMYK 色条 + CAD 淡纹 + 选中态薄荷绿）：</div>
+    <div class="row">
+      <div class="lvcard"><div class="cmyk"></div>
+        <div class="tag">CHAPTER 01</div>
+        <div class="t">烽火边境</div>
+        <div class="d">固定地图教学关。学会按住己方村庄拖向目标即派兵。</div>
+        <div class="meta"><span>Lv.1</span><span>人类</span></div>
+      </div>
+      <div class="lvcard sel"><div class="cmyk"></div>
+        <div class="tag">CHAPTER 02</div>
+        <div class="t">渡口阻击</div>
+        <div class="d">半军 + 召回教学。守住白石渡口唯一的石桥。</div>
+        <div class="meta"><span>Lv.2</span><span>已选</span></div>
+      </div>
+      <div class="lvcard"><div class="cmyk"></div>
+        <div class="tag">CHAPTER 06</div>
+        <div class="t">两线告急</div>
+        <div class="d">法师营登场。腹背受敌，学会用远程火力覆盖。</div>
+        <div class="meta"><span>Lv.6</span><span>天龙人</span></div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:22px">顶部 HUD 指挥条（势力进度，玩家=薄荷绿高亮）：</div>
+    <div class="hud cut">
+      <div class="camp"><div class="name me">我方</div><div class="bar"><div class="fill" style="width:62%;background:var(--mint)"></div></div><div class="pct" style="color:var(--mint)">62%</div></div>
+      <div class="camp"><div class="name">赤狼</div><div class="bar"><div class="fill" style="width:23%;background:var(--fc2)"></div></div><div class="pct" style="color:var(--fc2)">23%</div></div>
+      <div class="camp"><div class="name">碧潮</div><div class="bar"><div class="fill" style="width:15%;background:var(--fc3)"></div></div><div class="pct" style="color:var(--fc3)">15%</div></div>
+    </div>
+
+    <div class="note" style="margin-top:22px">公告面板（仿官网 #notice：左列表 + 右详情，方形冷灰）：</div>
+    <div class="notice cut">
+      <div class="list">
+        <div class="item on">v5.1 平衡性调整<span class="dt">2026-08-26</span></div>
+        <div class="item">新种族「矮人」上线<span class="dt">2026-08-20</span></div>
+        <div class="item">军械库系统开放<span class="dt">2026-08-12</span></div>
+      </div>
+      <div class="detail"><div class="cmyk"></div>
+        <h3>v5.1 平衡性调整</h3>
+        <p>本次更新下调了哥布林「贪食掠夺」的叠加上限，并提升了矮人「石肤壁垒」的减伤比例。同时优化了绝地反击的触发提示，使落后方补偿更易被感知。详细数值以游戏内为准。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 总结 -->
+  <section>
+    <h2><span class="hk">PLAN</span>落地到 index.html 的改动清单</h2>
+    <div class="en-sub">What Changes in index.html</div>
+    <div class="checklist">
+      <div><span class="add">＋新增</span> <b>CMYK 色条</b>：卡片/面板顶边加 <code>.cmyk</code> 三色条（青/品红/黄）。</div>
+      <div><span class="add">＋新增</span> <b>CAD 背景</b>：菜单/选关页加坐标系直线网格（复用本页背景写法）。</div>
+      <div><span class="add">＋新增</span> <b>薄荷绿变量</b> <code>--mint:#00ffa2</code>，选中/交互态改用它。</div>
+      <div><b>校准</b> 背景 <code>#111214</code> → <code>#191919</code>；描边 <code>#2b2d30</code> → <code>#35373c</code>。</div>
+      <div><b>校准</b> 按钮/卡片统一硬方体 + 切角，弱化现有圆角。</div>
+      <div><b>保留</b> Chakra Petch 字体、亮黄 <code>#fffa00</code>、势力色（玩家绿/敌红/敌青）不变。</div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

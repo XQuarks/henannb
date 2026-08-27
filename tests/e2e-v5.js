@@ -59,6 +59,12 @@ function stageLv(race, lv){
   pendingCampLevel=lv; campStage=lv; campRace=race; lastMode='camp';
   stageBattle();
 }
+// 快进当前导演简报：逐行 dlgAdvance 直到对话关闭、dirBusy 解除；再等 launchBattle 内 tryGuide 轮询挂引导
+async function fastFwdDirector(){
+  let g=0;
+  while(dirBusy && g++<80){ dlgAdvance(); dlgAdvance(); await new Promise(r=>setTimeout(r,0)); }
+  let g2=0; while(!guide && g2++<60){ await new Promise(r=>setTimeout(r,40)); }
+}
 
 // ========== A. 渐进解锁：种族分段开锁 ==========
 console.log('A. 种族渐进解锁');
@@ -121,6 +127,9 @@ const snapR=nodes.map(n=>Math.round(n.x)+'_'+Math.round(n.y)).join('|');
 T('同 seed 两次布图布局完全一致', snap1===snap2);
 T('无 seed 时布局不同（随机性保留）', snap1!==snapR);
 T('tutBridge 骨架带 seed', SKEL.tutBridge.mods.seed!=null);
+T('教学关骨架带固定 seed（L1/L3/L5/L6 独占骨架）', SKEL.teach.mods.seed!=null && SKEL.harvest.mods.seed!=null && SKEL.fog.mods.seed!=null && SKEL.pincer.mods.seed!=null);
+T('人类L7 引导骨架 tutSiege 带 seed 且独立于共用 siege', SKEL.tutSiege && SKEL.tutSiege.mods.seed!=null && SKEL.siege.mods.seed==null);
+T('人类L1 带开场导演简报（先进导演讲领地，再挂拖拽引导）', !!campLv('human',1).dir && !!GUIDES.l1);
 
 // ========== E. 半出兵（长按半军 + ½ 钮常开模式） ==========
 console.log('E. 半出兵');
@@ -213,6 +222,8 @@ aiFrozen=false;
 console.log('G. 可操控引导');
 _progCache=null; localStorage.removeItem('rtu_prog_v1'); getProg();
 stageLv('human', 2);
+// L2 现在带开场导演简报——本段是引导状态机单测，直接 drive update()，若不清理导演队列会被 dirTick 触发并置 paused=true 卡住 guideEvent。隔离之。
+dirQ=[]; dirBusy=false; paused=false;
 gameTime=0;
 guideBegin('l2');
 T('引导启动：aiFrozen 冻结 AI', guide!==null && guide.key==='l2' && aiFrozen===true);
@@ -254,12 +265,38 @@ console.log('H. 触发接线');
 _progCache=null; localStorage.removeItem('rtu_prog_v1'); getProg();
 pendingCampLevel=2; campStage=2; campRace='human'; factionOf[1]='human'; lastMode='camp';
 stageBattle(); stagedReady=false; launchBattle();
-T('人类L2 开战自动启动 l2 课', guide!==null && guide.key==='l2');
+// L2 现在带开场导演简报：先暂停播剧情，dirBusy 解除后才挂引导（导演先讲、再进引导）
+T('人类L2 开战先进入导演模式（dirBusy 暂停剧情简报）', dirBusy===true);
+await fastFwdDirector();
+T('导演讲完 → 自动启动 l2 课', guide!==null && guide.key==='l2');
 guideFinish();
 T('guideFinish 清理状态', guide===null && aiFrozen===false);
 factionOf[1]='goblin'; campRace='goblin';
 stageBattle(); stagedReady=false; launchBattle();
 T('非人类阵营不触发人类课', guide===null);
+
+// ========== I. 人类L1 拖拽引导 + 敌方红辉光 ==========
+console.log('I. L1 拖拽引导 + 敌方红辉光');
+_progCache=null; localStorage.removeItem('rtu_prog_v1'); getProg();
+factionOf[1]='human'; campRace='human';
+pendingCampLevel=1; campStage=1; lastMode='camp';
+dirQ=[]; dirBusy=false; paused=false;
+stageBattle(); stagedReady=false; launchBattle();
+T('人类L1 开战先进入导演模式（介绍玩家领地）', dirBusy===true);
+await fastFwdDirector();
+T('导演讲完 → 自动启动 l1 拖拽课', guide!==null && guide.key==='l1');
+guideEvent('send',{half:false});
+T('纯拖拽派兵 → 推进 l1 课', guide.i===1);
+guideFinish();
+// 敌方红辉光：L1 两只哥布林台词 → 对话框标记 enemy
+dlgGuests = lvCommanders(campLv('human',1),1);
+T('L1 敌军指挥官为两只哥布林', dlgGuests.length===2 && dlgGuests[0].race==='goblin' && dlgGuests[1].race==='goblin');
+dlgLines=[[2,'火把都点了——冲进村去！一件不留！']];
+dlgBuildCast(dlgLines); dlgIdx=-1; dlgNextLine();
+T('哥布林台词 → 对话框标记 enemy 红辉光', document.getElementById('dlgBox').classList.contains('enemy'));
+dlgLines=[[0,'他们以为人类是好拿捏的软柿子。']];
+dlgIdx=-1; dlgNextLine();
+T('人类台词 → 对话框无 enemy 类', !document.getElementById('dlgBox').classList.contains('enemy'));
 
 console.log('RESULT pass='+pass+' fail='+fail);
 process.exit(fail>0?1:0);   // 演出类 setTimeout 会挂住事件循环：测试完直接退出
