@@ -1242,11 +1242,6 @@ const CFG = {
   barnRotStep: 10,                           // 腐烂步长 s：每 10s 缩水一次
   barnRotMul: 0.9,                           // 每次腐烂容量 ×0.9（驻军同步钳到新容量）
   barnRotFloor: 15,                          // 容量下限：烂到 1/3 为止，不至于变成废格
-  // —— 批次C 生态专属机制 ——
-  grainRoadMul: 1.5,                         // 粮道（人类 L6）：占着前线城堡的势力，农舍产速倍率
-  // —— 批次A 常驻相机（地图平移/缩放）——
-  camMinZoom: 0.7,                           // 缩放下限：大地图也能一屏看全
-  camMaxZoom: 2.5,                           // 缩放上限：小格子上点选仍从容
   // 兵种数值（基础模板：村庄/箭塔出步兵；三种兵营的兵见下方 CAMP_UNITS）
   units: {
     // 普通建筑出来的兵（步兵）
@@ -1655,11 +1650,6 @@ function refitWorld(oW,oH){
   for(const m of cineMarks){ m.x=m.x*s+dx; m.y=m.y*s+dy; } // 导演标注跟随地图缩放
   if(cine){ cine.x=cine.x*s+dx; cine.y=cine.y*s+dy; }
   if(skillAiming){ aimPos.x=aimPos.x*s+dx; aimPos.y=aimPos.y*s+dy; }
-  // 常驻相机同步：世界被重排了，相机与全景归位点也要跟着走，否则视角会偏一边
-  cam.x=cam.x*s+dx; cam.y=cam.y*s+dy;
-  camHome.x=camHome.x*s+dx; camHome.y=camHome.y*s+dy;
-  if(MAPBB){ MAPBB.x0=MAPBB.x0*s+dx; MAPBB.x1=MAPBB.x1*s+dx; MAPBB.y0=MAPBB.y0*s+dy; MAPBB.y1=MAPBB.y1*s+dy; }
-  transformCoast(s,dx,dy);                             // 海岸线同步仿射变换（轮廓层，批次A）
   buildLandMask(); buildDistMatrix();                 // 掩膜/路网距离随新几何重建（邻接拓扑不变）
 }
 let prevW=0, prevH=0;
@@ -1688,11 +1678,7 @@ const _vg = { key:"", grad:null };   // 暗角径向渐变缓存
 // 打击感：占领顿帧慢动作（hit-stop）+ 连续占领连击计数
 let hitStopT=0, capStreak=0, capStreakLast=-99;
 // 终局演出：攻下最后一座敌方建筑后 → 镜头推近该建筑 + 慢动作放完占领特效 → 缓缓弹出结算
-let cam={x:0, y:0, zoom:1};        // 战斗镜头（等于 camHome 时为恒等变换，不影响常规画面）
-// 批次A 常驻相机：camHome=全景归位点（buildMap 末尾按地图包围盒算出）；
-// camUser=玩家手动平移/缩放过（true 时 camStep 不再自动拉回全景）；camVel=惯性甩动速度；
-// MAPBB=地图包围盒（含水域），平移边界钳制用。
-let camHome={x:0, y:0, zoom:1}, camUser=false, camVel={x:0,y:0}, MAPBB=null;
+let cam={x:0, y:0, zoom:1};        // 战斗镜头（zoom=1 时为恒等变换，不影响常规画面）
 let finale=null;                   // {node,t,dur} 非空 = 终局演出进行中
 let bannerSlow=false;              // 结算横幅以缓慢淡入方式出现（endGame 消费一次）
 let _lastCapNode=null;             // 玩家最近占领的建筑（终局镜头焦点）
@@ -1710,9 +1696,6 @@ let LAKES=[], DISTM=null, LANDMASK=null, LMW=0, LMH=0;
 // 山体：阻挡逻辑完全复用 LAKES（山也进 LAKES，pairGate / inLake 一行都不用改），
 // 这里只是额外记一份引用，渲染时跳过水样式、改画岩石。用 Set 存多边形引用做身份识别。
 let MOUNTAINS=new Set();
-// 外海格（批次A 固定图海岸雕刻）：阻挡同样复用 LAKES，但渲染跳过湖面样式——那是陆地外的海，
-// 不是陆地里的湖。用 Set 存多边形引用做身份识别（与 MOUNTAINS 同手法）。
-let SEACELLS=new Set();
 // 定时事件状态
 let evActive=null, evNextAt=0;
 // 技能/装备运行态：携带技能、冷却时刻、瞄准态、局内增益计时、地雷阵、AI 携带技
@@ -1736,7 +1719,6 @@ let BRIDGE_CELLS=[];                    // 桥面格缓存（过路费判定用�
 let tollAcc=0, tollFloatAt=-9;          // 过路费聚合飘字（同一波兵合并成一条，防刷屏）
 let goldLeafAt=0;                       // 刮金箔下次入账的 gameTime
 let barnRotAt=0;                        // 麦仓下次腐烂的 gameTime
-let grainRoadWas=false;                 // 粮道提示状态：上一帧玩家是否占着前线城堡（批次C）
 let demolishCount=0;                    // 本局拆除箭塔数（战报 DEM 行 + 成就）
 // —— 第三批：焚桥（兑现天龙 L2「再烧断他们的退路」）——
 // 焚断的关卡点用 "小|大下标" 记在 BURNED 里。桥是玩家点的火：玩家（owner 1）照走，其余阵营过不去。
@@ -1746,17 +1728,6 @@ let bridgeBurned=false;                 // 一次性事件：本局是否已焚�
 // cineMarks=地图标注特效（脉冲环+箭头+标签）；battleSiegeToast=重械营首占提示（每局一次）
 let dirQ=[], dirBusy=false, cine=null, cineMarks=[], battleSiegeToast=false;
 let dirT=0;   // 导演特效时钟（真实时间推进，暂停期间照常走，供标注动画使用）
-
-// —— 局中触发演出 midCine（GAME-UPDATE-PLAN 机制 ㉑）——
-// midQ=待触发剧本；midSeq/midIdx=正在播放的序列与游标；midWait=当前元素剩余等待（真实秒）；
-// midHold=等待异步元素（对白播完的回调）；midPausedByCine=本次暂停是演出造成的（可点掉）；
-// midResume=序列播完后恢复战斗（败局反转用）；timeScale=子弹时间倍率（loop 消费）
-let midQ=[], midSeq=null, midIdx=0, midWait=0, midHold=false, midBusy=false, midPausedByCine=false, midResume=false;
-let timeScale=1, timeScaleUntil=0;
-let midBuffState={ atk:1, spd:1, until:0, owner:1 };   // 局中演出增益（midCine buff）
-let _outroDone=false;      // ㉒ 胜利尾声对白幕：本局是否已播（防结算重入死循环）
-let reviveUsed=false;      // ㉓ 败局反转：本局是否已用过（只给一次救场）
-let pyrrhic=false;         // ㉓ 险胜徽记：本局是靠反转打回来的
 
 // 绝地反击（v5 落后补偿）：开局 60s 后被打到只剩最后 1 个据点（且曾拥有 ≥2 个）时自动触发——
 // 该据点产能 ×2、金色光环 + 倒计时，持续 20 秒，每局只生效一次。仅玩家方拥有。
@@ -2191,7 +2162,6 @@ function cellIsLandlocked(nd){
 // 带"离心偏置"防止随机走折返回中心；步间角度限制，保证枝条舒展不打结
 function genSkeleton(cx,cy,segLen,forceBranches,mode){
   const pts=[];
-  SKEL_META=null;   // 透出几何元信息（M3 两团团心），供轮廓层/塑形同步使用
   // —— v6 地形骨架：与其把树状大陆裁成目标形状（会丢格、小图还容易裁断），
   //    不如让脊柱直接长成那个形状，陆地沿脊柱自然生成，一格不丢。
   const dedup = () => pts.filter((p,i)=>pts.every((q,j)=>j>=i||dist(p,q)>segLen*0.55));
@@ -2219,7 +2189,6 @@ function genSkeleton(cx,cy,segLen,forceBranches,mode){
     const off=segLen*M3_OFF;
     const A={x:cx+Math.cos(ang)*off, y:cy+Math.sin(ang)*off};
     const B={x:cx-Math.cos(ang)*off, y:cy-Math.sin(ang)*off};
-    SKEL_META={A,B};   // 两团团心（不在 pts 中）：轮廓层 S2 碎群岛与整图适配都要用
     for(const C of [A,B]){
       const away=Math.atan2(C.y-cy, C.x-cx);
       pts.push({x:C.x,y:C.y});
@@ -2306,231 +2275,8 @@ function pickThreeFar(centers){
 }
 
 // ============== 地图模板库 v2（RACE-SYSTEM §8/§9）：M0 标准 / M1 对称 / M2 空心三角 / M3 双陆桥 / M4 中央堡垒 / M5 狭长走廊 ==============
-const TPL_NAMES = { M0:'树状大陆', M1:'树状大陆', M2:'树状大陆', M3:'双陆桥', M4:'中央堡垒', M5:'狭长走廊',
-  S1:'新月湾', S2:'碎群岛', S3:'环形湖心', S4:'裂谷峡谷', S5:'半岛岬角', S6:'三汊三角洲' };
-function pickTemplate(){ const r=Math.random();
-  return r<0.16 ? 'M0' : r<0.28 ? 'M1' : r<0.38 ? 'M2' : r<0.46 ? 'M3'
-       : r<0.58 ? 'S1' : r<0.70 ? 'S3' : r<0.80 ? 'S5' : r<0.88 ? 'S4' : r<0.95 ? 'S6' : 'S2'; }
-
-// ===================== 批次A：大陆架轮廓层（S1~S6 有机外形） =====================
-// 外形（海岸线）与骨架（内部路网）拆成两层正交：骨架管「路怎么连」，轮廓管「这块地方长什么样」。
-// 设计出处见 docs/MAP-REDESIGN-PROPOSAL.md §2：参考 State.io 类地图——陆地是有机剪影，
-// 不是铺满屏幕的矩形棋盘。脊柱与海岸线同源生成（先长脊柱，再按脊柱几何刻海岸），
-// 保证轮廓永远不会把路网切断；连通性仍由步骤 7.5 的最大连通分量硬保证兜底。
-const S_SHAPES = new Set(['S1','S2','S3','S4','S5','S6']);
-let COAST=null;        // 当前图海岸线 {shape,cx,cy,prims,hole?,test(x,y)}；非 S 模板为 null
-let SKEL_META=null;    // genSkeleton 透出的几何元信息（目前只有 M3 的两团团心），整图适配时同步变换
-
-// 海岸线脊柱生成：返回 {pts, meta}。meta.extra 里的点不在 pts 中（如海湾圆心），
-// 需要在整图适配（步骤 1.5）里同步缩放平移，否则轮廓会拿着缩放前的几何去裁缩放后的图。
-function genCoastSpine(shape,cx,cy,segLen){
-  const pts=[]; const meta={extra:[]};
-  const dedup=()=>pts.filter((p,i)=>pts.every((q,j)=>j>=i||dist(p,q)>segLen*0.55));
-  if(shape==='S1'){          // 新月湾：240° 弧带环抱一片海湾，缺口处湾通外海
-    const O={x:cx,y:cy}; meta.O=O; meta.extra.push(O);
-    const ra=segLen*3.4; meta.ra=ra;
-    const a0=rand(0,Math.PI*2), span=4.2;
-    const n=Math.max(10,Math.round(ra*span/(segLen*0.8)));
-    for(let i=0;i<=n;i++){
-      const a=a0+span*i/n, rr=ra+rand(-0.3,0.3)*segLen;
-      pts.push({x:O.x+Math.cos(a)*rr, y:O.y+Math.sin(a)*rr});
-      if(i%4===2 && MAP_RNG()<0.5){                    // 外缘偶发小凸出，湾形不呆板
-        pts.push({x:O.x+Math.cos(a)*(rr+segLen*0.9), y:O.y+Math.sin(a)*(rr+segLen*0.9)});
-      }
-    }
-    return {pts:dedup(),meta};
-  }
-  if(shape==='S2'){          // 碎群岛：两片主岛 + 腰间陆桥（脊柱复用 M3 两团+细腰）
-    const sp=genSkeleton(cx,cy,segLen,null,'M3');
-    meta.A=SKEL_META.A; meta.B=SKEL_META.B; meta.extra.push(SKEL_META.A,SKEL_META.B);
-    return {pts:sp,meta};
-  }
-  if(shape==='S3'){          // 环形湖心：一整圈陆地环抱中央大洞（洞=海，湖关可再挖湖心岛）
-    const O={x:cx,y:cy}; meta.O=O; meta.extra.push(O);
-    const r0=segLen*3.6; meta.r0=r0; meta.scalars=['r0'];
-    const n=Math.max(14,Math.round(2*Math.PI*r0/(segLen*0.85)));
-    for(let i=0;i<n;i++){
-      const a=i/n*Math.PI*2, rr=r0+rand(-0.28,0.28)*segLen;
-      pts.push({x:O.x+Math.cos(a)*rr, y:O.y+Math.sin(a)*rr});
-    }
-    return {pts:dedup(),meta};
-  }
-  if(shape==='S4'){          // 裂谷峡谷：两堵陆墙 + 一端连接（马蹄形），中间是切穿的谷
-    const horiz = W >= (H-G_TOP);
-    const ux=horiz?1:0, uy=horiz?0:1;                  // 长轴单位向量（沿屏幕长边）
-    const L=segLen*9, off=segLen*1.5;
-    const n=Math.max(4,Math.round(L/(segLen*0.85)));
-    for(let i=0;i<=n;i++){
-      const t=-L/2+L*i/n;
-      for(const s of [-1,1]){
-        pts.push({x:cx+ux*t-uy*s*off+rand(-0.2,0.2)*segLen, y:cy+uy*t+ux*s*off+rand(-0.2,0.2)*segLen});
-      }
-    }
-    for(let i=1;i<6;i++){                              // 连接端半圆：把两堵墙连成马蹄
-      const a=Math.PI*i/6, ex=cx-ux*L/2, ey=cy-uy*L/2;
-      pts.push({x:ex-uy*Math.cos(a)*off-ux*Math.sin(a)*off, y:ey+ux*Math.cos(a)*off-uy*Math.sin(a)*off});
-    }
-    meta.horiz=horiz; meta.L=L; meta.off=off;
-    return {pts:dedup(),meta};
-  }
-  if(shape==='S5'){          // 半岛岬角：树状大陆 + 一个主岬角（离质心最远的脊柱点）
-    const sp=genSkeleton(cx,cy,segLen,3,'M0');
-    let tip=sp[0], bd=-1;
-    for(const p of sp){ const d=dist(p,{x:cx,y:cy}); if(d>bd){ bd=d; tip=p; } }
-    meta.tip=tip;                                      // tip 在 pts 内，缩放自动跟随
-    return {pts:sp,meta};
-  }
-  // S6 三汊三角洲：中心枢纽 + 三条汊臂，臂间是 Y 形水道（偿还 M2 空心三叶旧债的地基）
-  const O={x:cx,y:cy}; pts.push(O); meta.O=O; meta.arms=[];
-  const a0=rand(0,Math.PI*2);
-  for(let k=0;k<3;k++){
-    const a=a0+k*2.094+rand(-0.15,0.15);
-    let x=O.x, y=O.y, end=null;
-    for(let s=0;s<5;s++){
-      const aa=a+rand(-0.1,0.1);
-      x+=Math.cos(aa)*segLen*1.05; y+=Math.sin(aa)*segLen*1.05;
-      end={x,y}; pts.push(end);
-    }
-    meta.arms.push(end);                               // 臂端在 pts 内，缩放自动跟随
-  }
-  return {pts:dedup(),meta};
-}
-
-// 海岸线噪声：同一角度查询结果一致（相位来自 MAP_RNG → 种子图轮廓可复现）
-function mkCoastNoise(){
-  const h=[];
-  for(let i=0;i<3;i++) h.push({ f:2+i+(MAP_RNG()<0.5?0:1), a:0.05+MAP_RNG()*0.07, p:MAP_RNG()*6.283 });
-  return ang=>{ let m=1; for(const w of h) m+=w.a*Math.sin(w.f*ang+w.p); return m; };
-}
-// 按脊柱几何刻海岸线：图元带符号（+ 陆地 / - 掏空），test 先对查询点做径向噪声扰动 → 有机海岸
-function buildCoast(shape, spine, minD, meta){
-  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-  for(const p of spine){ x0=Math.min(x0,p.x); y0=Math.min(y0,p.y); x1=Math.max(x1,p.x); y1=Math.max(y1,p.y); }
-  const cx=(x0+x1)/2, cy=(y0+y1)/2, hw=(x1-x0)/2, hh=(y1-y0)/2;
-  const pad=minD*1.9, noise=mkCoastNoise(), prims=[];
-  const E=(s,ex,ey,rx,ry)=>prims.push({s,k:'e',cx:ex,cy:ey,rx,ry});
-  const C=(s,px,py,r)=>prims.push({s,k:'c',cx:px,cy:py,r});
-  const S=(s,ax,ay,bx,by,w)=>prims.push({s,k:'s',x1:ax,y1:ay,x2:bx,y2:by,w});
-  let hole=null;
-  if(shape==='S1'){
-    E(+1,cx,cy,hw+pad,hh+pad);
-    const r=Math.max(minD*1.2, meta.ra-minD*1.05);
-    C(-1,meta.O.x,meta.O.y,r); hole={x:meta.O.x,y:meta.O.y,r};      // 海湾：弧带内缘掏空
-  } else if(shape==='S2'){
-    let rA=0,rB=0;
-    for(const p of spine){ rA=Math.max(rA,dist(p,meta.A)); rB=Math.max(rB,dist(p,meta.B)); }
-    C(+1,meta.A.x,meta.A.y,rA+minD*1.4); C(+1,meta.B.x,meta.B.y,rB+minD*1.4);
-    S(+1,meta.A.x,meta.A.y,meta.B.x,meta.B.y,minD*1.5);             // 腰间陆桥（连通保证）
-  } else if(shape==='S3'){
-    C(+1,meta.O.x,meta.O.y,meta.r0+pad);
-    const r=Math.max(minD*1.2, meta.r0-minD*1.55);
-    C(-1,meta.O.x,meta.O.y,r); hole={x:meta.O.x,y:meta.O.y,r};      // 中央大洞
-  } else if(shape==='S4'){
-    const horiz=meta.horiz, ux=horiz?1:0, uy=horiz?0:1;
-    const L=Math.max(hw,hh)*2, off=Math.min(hw,hh);
-    S(+1,cx-ux*(L/2+off*0.55),cy-uy*(L/2+off*0.55),cx+ux*L/2,cy+uy*L/2,off+pad*0.75);   // 马蹄外轮廓
-    S(-1,cx-ux*L*0.30,cy-uy*L*0.30,cx+ux*(L/2+off),cy+uy*(L/2+off),Math.max(minD*1.05,off-minD*1.35)); // 谷：+L 端开口
-  } else if(shape==='S5'){
-    E(+1,cx,cy,hw+pad*0.8,hh+pad*0.8);
-    C(+1,meta.tip.x,meta.tip.y,minD*2.6);                           // 岬角膨大
-    const ba=Math.atan2(cy-meta.tip.y,cx-meta.tip.x);               // 背面边缘啃一口
-    C(-1,cx+Math.cos(ba)*(hw+pad*0.4),cy+Math.sin(ba)*(hh+pad*0.4),Math.min(hw,hh)*0.55+minD);
-  } else if(shape==='S6'){
-    C(+1,meta.O.x,meta.O.y,minD*2.3);
-    for(const ep of meta.arms){ C(+1,ep.x,ep.y,minD*2.7); S(+1,meta.O.x,meta.O.y,ep.x,ep.y,minD*1.35); }
-  }
-  return {
-    shape,cx,cy,noise,prims,hole,
-    test(x,y){                 // 注意用 this.*：平移/缩放会改属性，闭包旧值会让噪声中心跑偏
-      const a=Math.atan2(y-this.cy,x-this.cx), m=this.noise(a)||1;
-      const px=this.cx+(x-this.cx)/m, py=this.cy+(y-this.cy)/m;
-      let inside=false;
-      for(const q of prims){
-        let hit=false;
-        if(q.k==='e'){ const dx=(px-q.cx)/q.rx, dy=(py-q.cy)/q.ry; hit=dx*dx+dy*dy<=1; }
-        else if(q.k==='c'){ hit=Math.hypot(px-q.cx,py-q.cy)<=q.r; }
-        else { const dx=q.x2-q.x1, dy=q.y2-q.y1, L2=dx*dx+dy*dy||1;
-          let t=((px-q.x1)*dx+(py-q.y1)*dy)/L2; t=Math.max(0,Math.min(1,t));
-          hit=Math.hypot(px-(q.x1+dx*t),py-(q.y1+dy*t))<=q.w; }
-        if(hit){ if(q.s<0) return false; inside=true; }
-      }
-      return inside;
-    }
-  };
-}
-// 终局居中平移时海岸线同步（否则轮廓拿着平移前的几何去校验平移后的格）
-function transformCoast(s,dx,dy){
-  if(!COAST) return;
-  const T=p=>{ p.x=p.x*s+dx; p.y=p.y*s+dy; };
-  const o={x:COAST.cx,y:COAST.cy}; T(o); COAST.cx=o.x; COAST.cy=o.y;
-  if(COAST.hole){ const h={x:COAST.hole.x,y:COAST.hole.y}; T(h); COAST.hole.x=h.x; COAST.hole.y=h.y; COAST.hole.r*=s; }
-  for(const q of COAST.prims){
-    if(q.k==='s'){ const a={x:q.x1,y:q.y1}, b={x:q.x2,y:q.y2}; T(a); T(b); q.x1=a.x; q.y1=a.y; q.x2=b.x; q.y2=b.y; q.w*=s; }
-    else { const c={x:q.cx,y:q.cy}; T(c); q.cx=c.x; q.cy=c.y; if(q.k==='c') q.r*=s; else { q.rx*=s; q.ry*=s; } }
-  }
-}
-function translateCoast(ox,oy){ transformCoast(1,ox,oy); }
-
-// ============ 批次A：固定地图海岸线雕刻 ============
-// 手写网格是规整矩形（黎总反馈「过于规整的方形大地图」），这里按椭圆海岸+谐波噪声+咬口
-// 把边角的普通村庄格啃成海，啃出有机海岸。三条铁律：
-//   ① 保护字符（基地/特殊建筑/兵营/桥面/碉堡）一律不啃 —— 关卡设计语义不动；
-//   ② 每啃一格都做网格 BFS 连通校验 —— 海岸线绝不能把地图切断；
-//   ③ 雕刻上限 22% —— 啃的是「外形」，不是「内容」。
-// 被啃掉的格转成 '~'（与江水同套阻挡），但标记 sea=true → 渲染层跳过湖面绘制（那是外海，不是湖）。
-const FIXED_PROT=new Set(['P','2','3','B','T','G','X','M','K','S','F','N','H','Z','a','m','r','s','w','e']);
-function carveFixedCoast(M, seeds, step, rng){
-  const land=seeds.filter(s=>s.ch!=='~' && s.ch!=='^' && s.ch!=='.');
-  if(land.length<14) return 0;
-  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-  for(const s of land){ x0=Math.min(x0,s.x); y0=Math.min(y0,s.y); x1=Math.max(x1,s.x); y1=Math.max(y1,s.y); }
-  const ccx=(x0+x1)/2, ccy=(y0+y1)/2, rx=(x1-x0)/2+step*0.30, ry=(y1-y0)/2+step*0.30;
-  const hs=[];
-  for(let i=0;i<3;i++) hs.push({ f:2+i+(rng()<0.5?0:1), a:0.06+rng()*0.08, p:rng()*6.283 });
-  const noise=ang=>{ let m=1; for(const w of hs) m+=w.a*Math.sin(w.f*ang+w.p); return m; };
-  const bites=[];
-  const nb=1+(rng()<0.5?1:0);
-  for(let i=0;i<nb;i++){
-    const a=rng()*6.283;
-    bites.push({ x:ccx+Math.cos(a)*rx*1.02, y:ccy+Math.sin(a)*ry*1.02, r:step*(0.9+rng()*0.8) });
-  }
-  const inCoast=(x,y)=>{
-    const a=Math.atan2(y-ccy,x-ccx), m=noise(a)||1;
-    const dx=(x-ccx)/(rx*m), dy=(y-ccy)/(ry*m);
-    if(dx*dx+dy*dy>1) return false;
-    for(const b of bites){ if(Math.hypot(x-b.x,y-b.y)<b.r) return false; }
-    return true;
-  };
-  // 网格 BFS（四邻）：雕刻后剩余陆地必须仍是一个整体。
-  // 刻意用四邻而不是八邻 —— 真实邻接（buildFixedAdjacency + pairGate 穿水校验）可能丢掉
-  // 斜对角边（新啃出的湖面正好卡在斜角之间），按八邻验「连通」会漏判（天龙 L1 实测踩坑）。
-  // 四邻连通 ⇒ 八邻候选下必然连通，保守但绝不切断地图。
-  const gridConn=()=>{
-    const alive=seeds.filter(s=>s.ch!=='~' && s.ch!=='^' && s.ch!=='.');
-    if(!alive.length) return false;
-    const key=s=>s.c+'|'+s.r, seen=new Set([key(alive[0])]), q=[alive[0]];
-    while(q.length){
-      const u=q.pop();
-      for(const v of alive){
-        const k=key(v);
-        if(seen.has(k)) continue;
-        if(Math.abs(u.c-v.c)+Math.abs(u.r-v.r)===1){ seen.add(k); q.push(v); }
-      }
-    }
-    return seen.size===alive.length;
-  };
-  const cands=land.filter(s=>!FIXED_PROT.has(s.ch) && !inCoast(s.x,s.y));
-  for(let i=cands.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [cands[i],cands[j]]=[cands[j],cands[i]]; }
-  const cap=Math.max(2,Math.floor(land.length*0.22));
-  let carved=0;
-  for(const c of cands){
-    if(carved>=cap) break;
-    const bak=c.ch; c.ch='~';
-    if(gridConn()){ c.sea=true; carved++; }
-    else c.ch=bak;                                   // 啃了会断路 → 这格留下
-  }
-  return carved;
-}
+const TPL_NAMES = { M0:'树状大陆', M1:'树状大陆', M2:'树状大陆', M3:'双陆桥', M4:'中央堡垒', M5:'狭长走廊' };
+function pickTemplate(){ const r=Math.random(); return r<0.30 ? 'M0' : (r<0.55 ? 'M1' : (r<0.80 ? 'M2' : 'M3')); }
 
 // 桥头碉堡（v6）：自然兵力回复上限 10，且驻军 1 兵需要来犯 2 兵才能抵消（见 arriveBall 的 pow×0.5）。
 // 上限刻意压到 10 —— 它强在「难啃」而不是「兵多」，抢下来之后也不会一家独大。
@@ -2713,9 +2459,6 @@ const SKEL={
   heist:    { tpl:'M6', mods:{lootGoal:40}, info:'固定战场 · 佣兵竞速桥图（手写 b9）· 先抢到 40 金币' },
   // —— v4 种族专属机制关（只在该族战役中出现）——
   harvest:  { tpl:'M0', mods:{seed:20260873, eventFast:true, barns:3}, info:'人类专属 · 麦仓遍地 抢收乱局（固定）' },
-  // —— 批次C · 人类叙事新骨架（S 轮廓模板）——
-  grainRoute:{ tpl:'S2', mods:{seed:20260881, eventFast:true, barns:2}, info:'人类专属 · 湖畔粮道 · 碎群岛运粮竞速（S2）' },
-  granaryHold:{ tpl:'S1', mods:{seed:20260882, frontCastle:2}, info:'人类专属 · 谷仓重镇 · 前线城堡粮道加成（S1 新月湾）' },
   trade:    { tpl:'M0', mods:{aiPreNodes:2, stalls:4}, info:'哥布林专属 · 富豪商路 货栈首占 8 金' },
   sanctum:  { tpl:'M2', mods:{sanctum:true, lakeBig:true}, info:'天龙专属 · 湖心龙神祭坛 八秒震慑清场' },
   forgewars:{ tpl:'M0', mods:{forge:true, aiPreNodes:2}, info:'矮人专属 · 符文熔炉 占领者全军强化' },
@@ -2761,19 +2504,6 @@ human:[
    {at:0.8, who:1, focus:'base', zoom:1.6, label:'你的领地',
     lines:[[1,'陛下，开战前先认清战场——画面上所有插着绿旗的建筑，都是您的领地。'],[0,'最大的那座是您的大本营，其余村镇也听从您的号令。'],[1,'记住这抹绿：是友非敌。下面让军师教您怎么从领地派兵出征。']]},
   ],
-  outro:[[1,'陛下，最后一面绿旗插上了被烧的麦田。'],[0,'把火把收起来。今晚，先让村民睡个好觉。'],[1,'……可狼烟，不止一处。']],
-  // C1.5 演出补丁：尾声时哥布林援军从地图边缘杀出——教「回防」（占到大半地图时触发，每局一次）
-  midCine:[
-    { on:'onAlmostWin', pct:72, seq:[
-      { cam:{owner:2}, zoom:1.9, label:'还有援军？！', dur:1.5 },
-      { spawn:{ owner:2, n:7, at:{owner:2} }, dur:0.4 },
-      { dlg:[[1,'陛下！哥布林又冒出来一队——是从地图边上绕过来的！'],
-             [0,'还有援军？！'],
-             [1,'别慌。把兵往回拉，先守住刚抢下来的村子——这就叫「回防」。'],
-             [0,'……传令：回防！一个村子都不许再丢。']] }
-    ]},
-  ],
-  outro:[[1,'陛下，最后一面绿旗插上了被烧的麦田。'],[0,'把火把收起来。今晚，先让村民睡个好觉。'],[1,'……可狼烟，不止一处。']],
   win:'边境的狼烟熄了，但这场战争才刚刚开始。'},
  {name:'渡口阻击', skel:'tutBridge', foes:['dragon','dragon'], brief:'白龙江横贯战场，江上只有一座白石桥，江心桥头堡中立——先夺下它，才过得去江。',
   d:[[0,'斥候来报，龙皇派出龙翼左卫、右卫两路，同抢白石渡！'],
@@ -2792,21 +2522,9 @@ human:[
           [0,'……那江那边的龙军，也一样过不来？'],
           [1,'正是。这座堡，是整条江上唯一的门闩。']]},
  ],
- outro:[[1,'石桥守住了。龙军的兵器堆了半座桥面。'],[0,'先王安这座桥头堡时说过：江是天险，人是门闩。'],[0,'今日之后，白龙江记得谁才是它的主人。']],
  win:'石桥上堆满了龙军的兵器，白龙江安然无恙。'},
- {name:'抢收麦季', skel:'harvest', tpl:'S5', foes:['goblin','dwarf'], brief:'三座大麦仓遍布全岛——抢在敌人前面收下粮仓，就是抢下整个收获季。',
+ {name:'抢收麦季', skel:'harvest', foes:['goblin','dwarf'], brief:'三座大麦仓遍布全岛——抢在敌人前面收下粮仓，就是抢下整个收获季。',
    d:[[1,'又是收获季……他们专挑这时候来抢粮！'],[0,'抢走我们的麦子，就想饿垮我们的军队？'],[0,'全军出城，保卫粮仓！乱局之中，手快者得食。']],
-  // C1.5 演出补丁：腐烂启动（60s）——运镜扫过麦浪变焦土 + 警报对白
-  midCine:[
-    { on:'onTime', t:60, seq:[
-      { cam:'barns', zoom:1.55, label:'⚠ 麦子开始烂了', dur:1.6 },
-      { vfx:'dust', at:'barns', dur:0.8 },
-      { dlg:[[1,'陛下！天太热，麦仓里的存粮开始烂了——每十秒缩一成！'],
-             [0,'那就别让它们烂在敌人手里。'],
-             [0,'全军听令：抢在麦子烂完之前，把粮仓夺回来！']] }
-    ]},
-  ],
-  outro:[[1,'三座麦仓，一座没丢。'],[0,'粮食进了仓，军心就进了我这一边。'],[1,'禀陛下——麦子还在，明年就还有得种。']],
   win:'满载而来的敌军，这次空手而回。',
   dir:[
    {at:3, who:1, focus:'barns', zoom:1.5, label:'大麦仓 · 高产粮仓',
@@ -2814,120 +2532,51 @@ human:[
            [0,'垦殖是我们的立国之本。一座都不许丢！'],
            [1,'还有一事：收获季天热，六十秒后麦仓开始腐烂，每十秒容量缩一成——手快者得食！']]},
   ]},
- {name:'圣塔守望', skel:'holyHold', tpl:'S1', foes:['dragon','dragon'], brief:'占领中央瞭望圣塔并坚守 45 秒——塔旗不倒，防线不破。',
+ {name:'圣塔守望', skel:'holyHold', foes:['dragon','dragon'], brief:'占领中央瞭望圣塔并坚守 45 秒——塔旗不倒，防线不破。',
    d:[[0,'王畿平原上的瞭望圣塔，是先王留下的防线之眼。'],[1,'情报确认：龙军先锋直扑圣塔而来——他们要挖掉我们的眼睛。'],[0,'传令三军：夺下圣塔，坚守四十五秒。塔旗不倒，防线不破！']],
-  // C1.5 演出补丁：守到 22s → 龙军主力抵达（运镜 + 敌增援）——「真正的考验才开始」
-  midCine:[
-    { on:'onTime', t:22, seq:[
-      { cam:{owner:2}, zoom:1.85, label:'龙军主力', dur:1.5 },
-      { spawn:{ owner:2, n:10, at:{owner:2} }, dur:0.4 },
-      { toast:['⚠','龙军主力抵达','敌方前线据点得到大批增援',3] },
-      { dlg:[[1,'陛下！龙军主力到了——他们的前锋一下子多出一倍！'],
-             [0,'守到现在的，是他们的试探。'],
-             [0,'真正的考验才开始。圣塔一步也不许退！']] }
-    ]},
-  ],
-  // ㉓ 败局反转试点（全战役第一关）：圣塔失守、前线垮掉 → 退守二道防线，
-  //    一次性预备队压上，目标改为「夺回圣塔再守 30s」；再败才真输，翻回来结算标「险胜」。
-  revive:{ vfx:'shock', at:'base', pop:14, holdTime:30,
-    slowmo:[0.3, 1.0],
-    lines:[[1,'陛下！圣塔丢了，前线也垮了——可后方的二道防线还在！'],
-           [0,'那就退到二道防线。'],
-           [0,'预备队全部压上去。夺回圣塔，再守三十秒——朕亲自压阵！']],
-    toast:['⚑','二道防线','预备队抵达 · 夺回圣塔并再守 30 秒',3.2],
-    buff:{ atk:1.2, dur:20 } },
-  outro:[[1,'四十五秒。圣塔的旗，一寸没退。'],[0,'龙军主力来过，又走了。'],[0,'格瑞姆，传令：防线之眼，从此昼夜不熄。']],
   win:'圣塔的灯火彻夜通明，王都安睡了第一个好觉。',
   dir:[
    {at:1.2, who:1, focus:'hold', zoom:2.1, label:'坚守目标 · 45s',
     lines:[[1,'陛下，就是这座圣塔——占领它，然后守住四十五秒！'],
            [0,'金色旗帜插上去之前，一步都不许后退。']]},
   ]},
- {name:'湖畔粮道', skel:'grainRoute', foes:['goblin','dragon'], brief:'碎群岛湖汊纵横，粮船航线穿岛而过——夺下沿线两座麦仓，把粮道握在手里（开局 60 秒后粮仓储量开始腐烂，手快者得食）。',
-   d:[[1,'斥候来报：碎群岛湖汊纵横，王国的粮船航线就从岛间穿过。'],
-      [0,'粮道断，则军心断。沿线的麦仓，一座都不许落在敌人手里。'],
-      [2,'岛多水多，抢完这座跑那座——看谁跑得快！'],
-      [3,'龙皇要粮。烧了航线，人类自己会饿趴下。']],
-  outro:[[1,'粮船重新挂上了王国的旗帜。'],[0,'航道通了，前线三军这个冬天不会挨饿。'],[1,'只是退潮的时辰不好掌握，下一趟得算准。']],
-  win:'粮船重新挂起了王国的旗帜，航道上再没有人敢拦。',
+ {name:'雾中渗透', skel:'fog', foes:['goblin','dragon'], brief:'浓雾封岛，敌军斥候趁雾渗透——近战堵口，一个也别放进来。',
+   d:[[1,'浓雾封岛……哥布林的斥候最爱这种天气。'],[0,'雾能挡住弓箭手的眼睛，挡不住人类的意志。'],[1,'近战步兵列队堵口，一个斥候也别放进来。']],
+  win:'雾散了，渗透进来的敌军一个不剩。',
   dir:[
-   {at:3, who:1, focus:'barns', zoom:1.5, label:'沿线麦仓 · 粮道命脉',
-    lines:[[1,'陛下，碎群岛的粮道就靠这些麦仓撑着——谁占仓，谁掌航线。'],
-           [0,'传令：先夺仓，再守线。粮道在，王国的军队就在。']]},
+   {at:3, who:1, focus:[{owner:2}], zoom:1.6, label:'浓雾 · 远程 −30%',
+    lines:[[1,'陛下，浓雾常驻——弓箭手和法师的射程被砍了三成。'],
+           [0,'那就用腿和刀说话。步兵堵住路口，一个斥候也别放进来。']]},
   ]},
- {name:'谷仓重镇', skel:'granaryHold', foes:['dragon','goblin'], brief:'两座前线城堡扼守粮道要冲——占住城堡，我方所有农舍产兵 +50%；城堡易主，补贴归敌。',
-    d:[[1,'谷仓重镇囤着前线三军的口粮，镇外两座前线城堡扼着粮道要冲。'],
-       [0,'城堡在，粮道就在；粮道在，农舍出兵就源源不绝。'],
-       [1,'陛下记住：谁占着前线城堡，谁的农舍产兵提速五成——夺下它，别放手！'],
-       [2,'烧了谷仓！让蝼蚁知道挨饿是什么滋味！'],
-       [3,'粮食……搬走！都搬走！嘿嘿嘿。']],
-  // C1.5 演出补丁：前线城堡易主 → 金色麦浪流光扫过农舍群（粮道补贴跟着换主人）
-  midCine:[
-    { on:'onCap', type:'fcastle', n:1, seq:[
-      { cam:'fcastle', zoom:1.75, label:'粮道开关 · 易主', dur:1.5 },
-      { vfx:'gold', at:'fcastle', dur:0.8 },
-      { dlg:[[1,'陛下！前线城堡易主——粮道的补贴，跟着换了主人。'],
-             [0,'城堡在，粮道就在。'],
-             [0,'夺回来。谷仓重镇的粮，一粒都不许便宜了他们。']] }
-    ]},
-  ],
-  outro:[[1,'前线城堡易主三次，最后插的还是麦穗旗。'],[0,'粮道在，农舍出兵就源源不绝。'],[0,'告诉后方的磨坊：今晚加班。']],
-  win:'城堡的麦穗旗重新升起，前线三军再不用数着米粒打仗。',
+ {name:'两线告急', skel:'pincer', foes:['dragon','goblin'], brief:'敌军南北对进，王师腹背受敌——被夹在中间，就从中路撕开缺口。',
+    d:[[1,'陛下！北面是龙军主力，南面是哥布林劫掠团——两面同时压过来了！'],[0,'腹背受敌？哼，那就在中间列阵，先断其一路，再回头收拾另一路。'],[1,'遵命！中路是我们的，两翼的敌人一个也跑不了。'],
+       [2,'两线齐压——先看看是人类的墙硬，还是龙的爪硬。'],[3,'抢完北边抢南边，一块地都不给人类留！']],
+  win:'南北两路敌军先后崩溃，中间突破成了战争史的教科书。',
   dir:[
-   {at:1.2, who:1, focus:'fcastle', zoom:1.7, label:'前线城堡 · 粮道开关',
-    lines:[[1,'陛下请看，金圈里就是前线城堡——占住它，我方农舍产兵 +50%。'],
-           [0,'好一座粮道开关。传令：城堡到手之前，不许停步。']]},
+   {at:1.2, who:1, focus:[{owner:2},{owner:3}], zoom:1.3, label:'两线之敌',
+    lines:[[1,'陛下请看——北面龙军、南面哥布林，我们被夹在正中间了。'],
+           [0,'看清了。传令：站稳中线，等他们先露破绽。']]},
   ]},
- {name:'光复村镇', skel:'tutSiege', mods:{towers:3}, foes:['dwarf','dragon'], brief:'沦陷村镇重兵驻守，三座烽火台已落敌手——一寸山河一寸血，逐一光复。',
+ {name:'光复村镇', skel:'tutSiege', foes:['dwarf','dragon'], brief:'沦陷村镇重兵驻守——一寸山河一寸血，逐一光复。',
   d:[[1,'光复的村镇都有重兵驻守，每一块都是硬骨头。'],[0,'一寸山河一寸血。慢慢啃，也要全部啃下来。'],[1,'中立村镇驻军翻倍，硬仗开始了，陛下。']],
   dir:[
    {at:0.8, who:1, focus:'base', zoom:1.6, label:'光复在即 · 硬仗',
     lines:[[1,'陛下，沦陷的村镇都有重兵驻守，每一块都是硬骨头。'],
            [0,'一寸山河一寸血。慢慢啃，也要全部光复——先从那把重锤开始。']]},
   ],
-  // C1.5 演出补丁：烽火台逐座点燃（第一座 / 三座全燃 = 反攻信号）
-  midCine:[
-    { on:'onCap', type:'tower', n:1, seq:[
-      { cam:'towers', zoom:1.6, label:'烽火台 · 点燃', dur:1.4 },
-      { vfx:'fire', at:'towers', dur:0.8 },
-      { dlg:[[1,'第一座烽火台点着了！'],
-             [0,'火光一路传下去——照到哪儿，哪儿就是我们丢过的地。'],
-             [0,'继续。一寸山河一寸血，今天连本带利收回来。']] }
-    ]},
-    { on:'onCap', type:'tower', n:3, seq:[
-      { cam:'towers', zoom:1.55, label:'三垒连燃 · 反攻信号', dur:1.5 },
-      { vfx:'fire', at:'towers', dur:1.0 },
-      { dlg:[[1,'三座烽火台全数点燃——这是反攻的信号！'],
-             [0,'全军听令：顺着火光，一路光复到底。']] }
-    ]},
-  ],
-  outro:[[0,'一寸山河一寸血。今天，血没有白流。'],[1,'三座烽火台全数光复，村民在村口跪了一地。'],[0,'扶他们起来。朕的百姓，不跪自己的王师。']],
   win:'旗帜重新升起，村民含泪迎接王师。'},
- {name:'围城打援', skel:'alliance', tpl:'S6', foes:['goblin','dragon'], brief:'三汊三角洲上，与天龙人结盟围剿哥布林主力——但破敌之后，盟约还作数吗？',
+ {name:'围城打援', skel:'alliance', foes:['goblin','dragon'], brief:'与天龙人结盟围剿哥布林主力——但破敌之后，盟约还作数吗？',
    d:[[0,'哥布林主力龟缩在三角地带，硬啃代价太大。'],[1,'陛下，天龙人遣使来盟——愿意与我们两面合围，事成之后湖心归他们。'],[0,'先借他们的翅膀。记住：盟约只在敌人死前有效。全军出击！']],
-  // C1.5 演出补丁：破盟瞬间——子弹时间 + 运镜对准倒戈的盟友 + 对白反转
-  // （本关自带 onBetray 演出，dirBuildQueue 不再自动追加通用反水剧本）
-  midCine:[
-    { on:'onBetray', seq:[
-      { slowmo:[0.25, 1.2] },
-      { cam:{owner:3}, zoom:2.0, label:'背盟！', dur:1.4 },
-      { dlg:[[1,'报——哥布林主力已被击溃！可是……天龙人掉转了枪口！'],
-             [0,'盟约？朕早就说过——那是张废纸。'],
-             [0,'传令全军：既然翻了脸，那就连他们一起埋葬。']] }
-    ]},
-  ],
-  outro:[[1,'哥布林主力没了，天龙人的盟约也没了。'],[0,'朕说过：盟约只在敌人死前有效。'],[1,'……陛下比臣记得更清楚。']],
   win:'背盟者被埋葬在他们自己选的战场上。人类的疆界，一寸未失。',
   dir:[
    {at:1.2, who:1, focus:{owner:3}, zoom:1.9, label:'临时盟友',
     lines:[[1,'陛下，金圈标出的就是天龙人的营地——他们是今天的盟友。'],
            [0,'先一起关门打狗。至于门后的账……打完再算。']]},
   ]},
- {name:'王对王', skel:'regicide', tpl:'S5', foes:['dragon','goblin'], brief:'侵略者的皇帝御驾亲征——不必恋战，攻占金帐，斩首即胜。',
+ {name:'王对王', skel:'regicide', foes:['dragon','goblin'], brief:'侵略者的皇帝御驾亲征——不必恋战，攻占金帐，斩首即胜。',
    cmd:['奥瑞斯','裂爪'],
     d:[[0,'侵略者的皇帝亲自来了，带着他最骄傲的将领。'],[1,'斥候确认了皇帐位置——只要大帐易主，他们的战争就结束了。'],[0,'我也是国王。国王对国王——让他看看谁的意志更坚硬。'],
        [2,'朕御驾亲征，就是要亲眼看着人类的王冠落地。'],[3,'大王说了：皇帝亲自压阵，这票十拿九稳！']],
-  outro:[[2,'朕的皇冠……竟然滚到了泥里。'],[0,'捡起来。战争还没结束——但你的那顶，到此为止。'],[1,'敌皇被俘。陛下，王畿的门开了。']],
   win:'侵略者的皇冠滚落在地，战争即将结束。',
   dir:[
    {at:1.2, who:1, focus:'king', zoom:2.05, label:'斩首目标 · 敌皇金帐',
@@ -2938,7 +2587,6 @@ human:[
    cmd:['薇拉','尖尖'],
     d:[[0,'最后了。他们的王座要塞就在前方，占领它，战争就结束了。'],[1,'要塞每八秒一次毁灭脉冲，红色预警圈内的士兵会被清空——务必小心。'],[0,'让最后一面绿色的旗帜，插在和平之门上。全军——突击！'],
        [2,'皇帝倒下了，但龙翼未折。放马过来，人类。'],[3,'家底全押在这儿了……守住！拜托守住啊！']],
-  outro:[[1,'要塞陷落。四方来朝的使节已在门外候着。'],[0,'他们问朕想要什么。'],[0,'朕说：和平。不是停战，是和平。'],[1,'人类用坚守赢来的和平——史书会这么写。']],
   win:'要塞陷落，四方来朝。人类用坚守赢得了和平。',
   dir:[
    {at:3, who:1, focus:'boss', zoom:1.75, label:'⚠ 占领即胜 · 八秒一脉冲',
@@ -2950,7 +2598,6 @@ dragon:[
  {name:'蝼蚁的村庄', skel:'teach', foes:['human','dwarf'], brief:'拿边境的小村庄练练爪子——让低等种族记住龙焰的温度。',
    d:[[1,'陛下，边境有个小村子，人类建的，吵吵闹闹。'],[0,'蝼蚁筑巢，也配叫村子？'],[1,'拿它练练爪子？就当……热身。'],[0,'准了。让低等种族记住龙焰的温度。'],
       [2,'就凭前面那个冒烟的破村子？老元帅我一个人守就够了。'],[3,'锤子都闲得发痒了——正好让蜥蜴见识见识铁砧的硬度！']],
-  outro:[[1,'村子烧了，蝼蚁散了。'],[0,'朕的爪子甚至没有热起来。'],[0,'继续。大陆比朕想象的更吵闹。']],
   win:'蝼蚁们逃散了。龙的征途，从脚下开始。'},
  {name:'焚断桥', skel:'bridge', foes:['human','human'], brief:'白龙江上只有一座白石桥，江心桥头堡中立——先碾碎它，再烧断蝼蚁的退路。',
   d:[[1,'陛下的前锋被一条大江拦住了：白龙江横贯全境，两岸只通一座白石桥。'],
@@ -2964,11 +2611,9 @@ dragon:[
            [1,'铁律一条：堡不归我，龙翼便过不了江。请先夺堡，再谈焚桥。'],
            [0,'那就让江心先烧起来。']]},
   ],
-  outro:[[1,'两座桥都化成了焦炭，江水被龙焰蒸得发白。'],[0,'蝼蚁从此没有渡口。'],[1,'陛下……他们会在下游重新修桥。'],[0,'那就再烧一次。']],
   win:'桥头化作了焦炭，白龙江上再无渡口。龙威所至，寸草不留。'},
  {name:'徒手折辱', skel:'demolish', foes:['human','goblin'], brief:'箭塔留不得——占下来，长按把它夷为平地。高贵的龙族不需要躲在塔后面。',
   d:[[0,'拆掉所有箭塔。'],[1,'陛下？！那是防御工事——'],[0,'高贵的龙族不需要躲在塔后面。徒手，碾碎他们。'],[1,'……遵命。这将是纯粹实力的一课。'],[1,'占领箭塔后，长按它不放——一秒半，夷为平地。']],
-  outro:[[1,'三座箭塔，片瓦不留。'],[0,'躲在石头后面的人，不配让龙记住名字。'],[0,'下一个。']],
   win:'没有箭塔的战场，只剩龙裔的脚步声。',
   dir:[
    {at:3, who:1, focus:'towers', zoom:1.5, label:'拆塔令 · 占塔后长按夷平',
@@ -2978,7 +2623,6 @@ dragon:[
  {name:'圣塔归龙', skel:'holy', foes:['human','dwarf'], brief:'矮人声称中央三塔是他们先祖的遗迹——占领它，宣示主权。',
     d:[[1,'中央矗立着三座古塔，矮人声称那是他们的先祖遗迹。'],[0,'荒谬。龙飞过天空时，这些石头还没出生。'],[0,'占领它。让所有种族知道，连他们的神迹都属于龙。'],
        [3,'先祖的石塔被龙占了？！弟兄们，抄家伙——夺回来！'],[2,'想夺塔？先问问元帅的剑答不答应。']],
-  outro:[[1,'三座古塔都挂上了龙旗。'],[0,'矮人说这是他们的祖产。'],[0,'那从今天起，他们的祖宗也归龙管。']],
   win:'圣塔顶端升起了龙旗。主权，无需讨论。',
   dir:[
    {at:3, who:1, focus:'towers', zoom:1.45, label:'古龙圣塔 · 得塔者得胜',
@@ -2987,7 +2631,6 @@ dragon:[
   ]},
  {name:'龙巢王庭', skel:'mega', foes:['goblin','human'], brief:'平原中央的巨型堡垒是天然的王庭——得中间者，得天下。',
    d:[[1,'陛下，平原中央的巨型堡垒，是天然的巢穴宝座。'],[0,'就在那里建朕的行宫。得中间者，得天下。'],[1,'各族都会来抢——正好，省得挨个去找。']],
-  outro:[[1,'行宫落成。各族的使节在阶下排了三里。'],[0,'朕不要他们的贡品。'],[0,'朕要他们记得——抬头看的时候，先看见龙翼。']],
   win:'巨型堡垒上升起了龙旗。万族仰望。',
   dir:[
    {at:3, who:1, focus:'center', zoom:1.8, label:'龙巢王庭 · 得中间者得天下',
@@ -2996,15 +2639,12 @@ dragon:[
   ]},
  {name:'不屑埋伏', skel:'ambush', foes:['human','dwarf'], brief:'人类和矮人事先设伏抢占大量据点——龙翼一展，正面平推。',
   d:[[1,'陛下，前面有埋伏！人类和矮人事先占了大量据点！'],[0,'埋伏？蝼蚁举起了树枝，就叫埋伏了吗？'],[1,'……属下多虑了。龙翼一展，正面平推便是。']],
-  outro:[[1,'所谓埋伏，连一次像样的反击都没组织起来。'],[0,'朕甚至没有用第二口气。'],[1,'陛下，轻敌是唯一能伤到龙的东西。'],[0,'朕从不轻敌——朕只是不在乎。']],
   win:'所谓埋伏，不过是给龙送战功。'},
  {name:'顽固要塞', skel:'siege', foes:['dwarf','dwarf'], brief:'矮人据点重兵把守、异常顽固——龙息虽烈，一口一口喷。',
   d:[[1,'矮人的据点异常顽固，重兵把守，久攻不下。'],[0,'石头做的家伙果然和石头一样顽固。'],[1,'龙息虽烈，也得一口一口喷。慢慢啃，陛下。']],
-  outro:[[1,'要塞凿开了。矮人的石头，到底没硬过龙息。'],[0,'他们守了多久？'],[1,'三个时辰。比预计的多半个。'],[0,'记下来。这份顽固，值得一句墓志铭。']],
   win:'最顽固的要塞也低了头。下一个是谁？'},
  {name:'三面合围', skel:'sanctum', foes:['human','goblin'], brief:'湖心的龙神祭坛已经苏醒——唤醒它，让震慑龙息替我们清扫蝼蚁。',
    d:[[1,'陛下，残存的抵抗者退进了三角地带负隅顽抗。'],[0,'湖心岛上，龙神祭坛苏醒了。占领它——龙神之息每八秒清扫一次周围的一切。'],[1,'三面合围，祭坛为饵。一场优雅的狩猎。']],
-  outro:[[1,'猎物入网，龙神之息吞没了最后一点抵抗。'],[0,'祭坛认了朕的血脉。'],[0,'从今往后，龙神只认一个声音。']],
   win:'猎物入网。龙神之息吞没了最后的抵抗者。',
   dir:[
    {at:3, who:1, focus:'altar', zoom:1.9, label:'龙神祭坛 · 八秒震慑清场',
@@ -3013,7 +2653,6 @@ dragon:[
   ]},
  {name:'傲慢代价', skel:'regicide', foes:['human','dwarf'], brief:'各族推出觉醒秘术的英雄——掀翻英雄大帐，让傲慢付出代价。',
    d:[[1,'陛下！各族推出了英雄，据说觉醒了失传的秘术！'],[0,'秘术？朕倒要看看，凡人的把戏能翻起什么浪。'],[1,'请陛下慎战——轻敌，是唯一能伤到龙的东西。']],
-  outro:[[1,'觉醒的英雄……倒在了自己的大帐前。'],[0,'秘术是真的。可惜，真的东西也会碎。'],[0,'擦擦爪子。该回去了。']],
   win:'龙皇擦去爪上的血："有点意思，但到此为止。"',
   dir:[
    {at:1.2, who:1, focus:'king', zoom:2.05, label:'斩首目标 · 英雄大帐',
@@ -3022,7 +2661,6 @@ dragon:[
   ]},
  {name:'君临天下', skel:'boss', foes:['human','dwarf'], brief:'占领最后的王座要塞——今日之后，天下只有一个声音。',
    d:[[1,'最后的王座要塞就在眼前。占领它，大陆就是陛下的了。'],[0,'八秒一次的脉冲？在龙的时间面前不值一提。'],[0,'全军听令——踏平它。今日之后，天下只有一个声音。']],
-  outro:[[1,'王座要塞陷落。大陆之上再无第二面旗帜。'],[0,'薇拉，朕要你记下今天。'],[0,'不是「龙赢了」，是「从此天下只有一个声音」。'],[1,'遵命，陛下。历史由胜利者书写。']],
   win:'龙皇登上王座，君临天下。历史由胜利者书写。',
   dir:[
    {at:3, who:1, focus:'boss', zoom:1.75, label:'⚠ 占领即胜 · 八秒一脉冲',
@@ -3034,7 +2672,6 @@ goblin:[
   {name:'饿肚子开工', skel:'teach', foes:['human','dwarf'], brief:'部落断粮三天——先抢个人类村子练手（首占无主地块 +3 金币，每 10 金币全军攻击/移速 +5%）。',
    d:[[1,'大王！部落断粮三天了，小弟们饿得直啃盾牌……'],[0,'盾牌是铁的，怎么能啃呢！……咦，等等，铁也能卖钱？'],[1,'隔壁人类的村子就有粮又有钱，咱们……'],[0,'还等什么！按住村子拖出去就能抢——呃，是"出征"！'],[1,'对了对了大王，头一回抢下的无主地盘值 3 枚金币——每攒满 10 枚，兄弟们的刀更快、腿更勤，攻和移速各涨 5%！'],
       [2,'斥候都探好了：村口连个像样的岗哨都没有——抢他娘的！'],[3,'哼，让那群绿皮尝尝矮人锤子的滋味。']],
-   outro:[[1,'大王！第一票到手，三枚金币！'],[0,'三枚够干啥的？……算了，先烤肉！'],[1,'是！全族围着篝火庆功——明天抢更大的！']],
    win:'第一票到手！部落今晚围着篝火烤肉庆功！'},
   {name:'此桥是我开', skel:'toll', foes:['goblin','goblin'], brief:'浑水江上只有一座老石桥，江心桥头堡中立——先抢下它，再收满 30 枚过路费！',
    d:[[0,'前面的老石桥，商队必经之路！'],
@@ -3042,7 +2679,6 @@ goblin:[
       [0,'大王我刚接到信——我亲弟弟和他舅舅的部落同时看上了这座桥，两路人马谁也不让谁！'],
       [1,'那还等啥？两路同族兄弟正斗气，咱得在他们火并之前把碉堡先抢过来——之后过路费一个金币都不能少！'],
       [1,'对了大王，还有个死规矩：堡不是咱的，咱的兄弟就过不了桥。']],
-  outro:[[1,'三十枚金币，一个不少！'],[0,'商队哭着交钱的样子，真好看。'],[1,'大王，咱这算……收费站？'],[0,'不。这叫「商道」。听起来就体面！']],
   win:'商队哭着交完买路财。哥布林的"商道"开业大吉！',
   dir:[
    {at:1.2, who:1, focus:'bunker', zoom:2.05, label:'江心桥头堡 · 一个顶俩',
@@ -3056,11 +2692,9 @@ goblin:[
   ]},
  {name:'黑市军火', skel:'camps7', foes:['human','dwarf'], brief:'场上七座兵营全是好货——还有能轰开金库大门的重械营！',
   d:[[1,'大王，光靠弹弓抢不动大户了，得升级装备！'],[0,'哪里的装备最好？'],[1,'场上有七座兵营，弓的法的贼的全有——全抢过来！']],
-  outro:[[1,'七座兵营，全抢过来了！'],[0,'弓的、法的、贼的——还有那个会轰门的大铁疙瘩！'],[1,'大王，从今天起咱也是正规军了！'],[0,'正规不重要，能抢才重要！']],
   win:'武装到牙齿的哥布林军团，正式成立！'},
  {name:'金顶圣塔', skel:'goldholy', foes:['dragon','human'], brief:'情报确认：中央圣塔塔顶贴的是真·金箔——先占塔，再刮金。',
    d:[[1,'大王！情报确认：中央三座圣塔的塔顶，贴的是真·金箔！'],[0,'金箔！！快快快，全拆下来！'],[1,'冷静！先占塔，再慢慢刮——得塔者得金箔嘛。']],
-  outro:[[1,'三座金顶塔，刮得干干净净！'],[0,'金子！真金子！本大王要数三遍！'],[1,'账本上已经写了：发、大、财。']],
   win:'哥布林的账本上多了三个金字：发、大、财！',
   dir:[
    {at:3, who:1, focus:'towers', zoom:1.45, label:'真·金箔 · 一座都别落下',
@@ -3070,7 +2704,6 @@ goblin:[
   ]},
  {name:'古堡藏宝', skel:'mega', foes:['dwarf','human'], brief:'巨大的远古堡垒下藏着宝藏——占了中心，就是占了宝库大门。',
    d:[[0,'尖尖，那座巨大的远古堡垒下面，是不是藏着宝藏？'],[1,'传说如此，大王。谁占了古堡，谁就占了宝库大门。'],[0,'还愣着干嘛！冲进去挖宝啊！']],
-  outro:[[1,'宝库大门到手了！'],[0,'门到手了，金子呢？！'],[1,'在……在地窖里。得慢慢挖。'],[0,'挖！挖到天亮！']],
   win:'宝库大门到手！虽然还没挖到金子，但快了！',
   dir:[
    {at:3, who:1, focus:'center', zoom:1.8, label:'宝库大门 · 占中心',
@@ -3079,7 +2712,6 @@ goblin:[
   ]},
  {name:'肥羊有防备', skel:'trade', foes:['human','dwarf'], brief:'富豪的商路货栈遍布全岛——每座货栈头一笔买卖值 8 枚金币！',
    d:[[1,'大王，不好了！富豪们听说我们要来，提前布防了好多据点！'],[0,'有防备才有抢头！防守越好，说明家里越有钱！'],[1,'……有道理，我竟然无法反驳。兄弟们，硬抢！']],
-  outro:[[1,'四座货栈，全搬空了！'],[0,'有防备的才是肥羊！'],[1,'大王英明——保险柜比粮仓值钱多了。']],
   win:'富豪们的保险柜，成了哥布林的存钱罐。',
   dir:[
    {at:3, who:1, focus:'stalls', zoom:1.5, label:'货栈 · 首占值 8 G',
@@ -3088,15 +2720,12 @@ goblin:[
   ]},
  {name:'硬骨头金库', skel:'siege', foes:['dwarf','dwarf'], brief:'硬骨头金库双倍守卫——啃下来这一票，十年不用干活！',
   d:[[1,'大王，前面就是传说中的硬骨头金库，守卫是双倍编制！'],[0,'双倍的守卫……那就是双倍的金子！'],[1,'啃下来这一票，部落十年不用干活！']],
-  outro:[[1,'金库大门轰开了！'],[0,'金子！全是金子！'],[1,'大王，这一票够部落十年不干活了！'],[0,'十年？那第十一年呢？……先别管了，搬！']],
   win:'金库大门轰然洞开。哥布林史上最大单笔入账！'},
  {name:'三岔口分赃', skel:'pocket', foes:['dragon','human'], brief:'说好一起抢的三家要分赃了——先下手为强，湖心还有大宝贝！',
   d:[[1,'大王，说好一起抢的三家，现在要在三岔口分赃了……'],[0,'分赃？我的金子凭什么分给别人？'],[1,'所以说……先下手为强？湖心还有个没人要的大宝贝！']],
-  outro:[[1,'赃物翻倍，友谊归零！'],[0,'分赃？我的金子凭什么分给别人！'],[1,'大王说得对——黑吃黑，才是祖传的手艺。']],
   win:'黑吃黑大获全胜！赃物翻倍，友谊归零。'},
  {name:'抢劫犯被抢', skel:'heist', foes:['goblin','goblin'], brief:'被抢急眼的两族雇了哥布林佣兵反抢咱们——先抢满 40 金币，别给他们面子！',
    d:[[1,'大王！被抢的两族雇了一堆哥布林佣兵，反过来抢咱们了！'],[0,'什么？！抢人的被抢，传出去还要不要面子！'],[1,'别急——桥心那座碉堡，一个守军顶俩，占住它路就宽了！'],[0,'好！先把碉堡抢了，再比谁先抢满四十枚金币！']],
-  outro:[[1,'反抢回来的，比抢来的还多！'],[0,'抢人的被抢，这传出去多丢人——'],[1,'可咱们是抢回来了呀，大王！'],[0,'对！那是他们丢人，不是咱！']],
   win:'反抢回来的战利品，比抢来的更香！',
   dir:[
    {at:1.2, who:1, focus:'bunker', zoom:2.05, label:'桥头堡 · 先抢下来',
@@ -3108,7 +2737,6 @@ goblin:[
   ]},
  {name:'传说金库', skel:'boss', foes:['dwarf','human'], brief:'攻陷矮人王的传说金库要塞——史上最大的一票！（小心脉冲预警圈）',
    d:[[0,'尖尖！前面……前面就是矮人王的传说金库？！'],[1,'千真万确！占了那座要塞，大王您就是大陆首富！'],[0,'注意那个八秒一次的大波波，别把兄弟们震晕了！'],[0,'兄弟们！为了金子！史上最大的一票——冲啊！！']],
-  outro:[[1,'大——王——！传说金库！全是金币！'],[0,'本大王……大陆首富！！'],[1,'大王坐上去就下不来了。'],[0,'那就别下来了！把金库改造成王座！']],
   win:'传说金库易主！咕噜姆大王坐上了金币堆成的王座！',
   dir:[
    {at:3, who:1, focus:'boss', zoom:1.75, label:'⚠ 占领即胜 · 八秒一脉冲',
@@ -3120,7 +2748,6 @@ dwarf:[
  {name:'嘲笑的代价', skel:'teach', foes:['human','goblin'], brief:'有人笑矮人个子矮——教他们知道，矮子的斧头有多高。',
    d:[[1,'王！有人管咱叫……叫"矮子"！还笑！'],[0,'谁笑的？'],[1,'好几家都笑了……边境那村的守军昨天还学咱走路的样子。'],[0,'好。很好。教他们知道，矮子的斧头有多高。'],
       [2,'学矮子走路怎么了？长多高，就该干多高的活儿。'],[3,'嘿嘿，笑一笑不要钱——可抢你一票，是要收利息的！']],
-  outro:[[1,'王，第一个嘲笑者付出了代价。'],[0,'一个不够。'],[0,'所有笑过的，一个一个来。']],
   win:'第一个嘲笑者付出了代价。但这只是开始。'},
  {name:'断桥立誓', skel:'bridgeOath', foes:['dwarf','dwarf'], brief:'黑铁江上只剩半座断桥，江心桥头堡中立——先凿开它，再一把火烧断他们的退路！',
   d:[[0,'铜砧，就在这座断桥上，我要立个誓。'],[1,'您说！全族的锤子都听着！'],[0,'从今天起，直到所有嘲笑矮人的家伙低头为止——战斗不止！'],
@@ -3133,15 +2760,12 @@ dwarf:[
            [1,'还有一条铁律：堡不归我，咱的锤子就上不了桥。'],
            [0,'那还愣着干什么——凿开它，再放火烧了他们的退路！']]},
   ],
-  outro:[[1,'断桥上的誓言，风把它带下山了。'],[0,'铜砧，誓言这东西，出口就得算数。'],[1,'全族的锤子都听见了，王。'],[0,'那就不许停——直到没人敢笑为止。']],
   win:'断桥上的誓言，随风传遍了大陆。'},
  {name:'锻造大赛', skel:'camps7', foes:['human','goblin'], brief:'七座工坊一字排开，重械营里还有攻城锤——矮人的锤子要用最好的装备武装。',
   d:[[1,'王！开战前先干件正事——场上有七座工坊！'],[0,'抢过来。矮人的锤子要用最好的装备武装。'],[1,'远程的法术的突袭的全都要！锻造大赛，现在开始！']],
-  outro:[[1,'七座工坊，全是咱的了！'],[0,'锤子要用最好的装备武装。'],[1,'钢铁洪流，蓄势待发！'],[0,'先别发。先磨利了再说。']],
   win:'全副武装的矮人军团，钢铁洪流蓄势待发。'},
  {name:'先祖圣塔', skel:'holy', foes:['dragon','goblin'], brief:'中央三塔是先祖雕刻的杰作却被霸占多年——夺回来！',
    d:[[1,'王！中央那三座石塔……是咱先祖雕的！被霸占几十年了！'],[0,'什么？！先祖的手笔，岂容他人染指！'],[1,'夺回来吧！让先祖的石塔再次为矮人而战！']],
-  outro:[[1,'三座石塔，全数回归。'],[0,'先祖的手笔，一寸都不许少。'],[1,'王……您看塔上的符文，亮了。'],[0,'那是祖宗在点头。']],
   win:'先祖圣塔回归。塔上的符文亮了，像是欣慰。',
   dir:[
    {at:3, who:1, focus:'towers', zoom:1.45, label:'先祖遗作 · 夺回来',
@@ -3150,7 +2774,6 @@ dwarf:[
   ]},
  {name:'祖地大厅', skel:'mega', foes:['goblin','human'], brief:'中央的岩石大厅是祖地旧殿，竟被人当了仓库——收复它！',
    d:[[1,'王，中央那座巨大的石造大厅……老辈人说，那是咱祖上的厅堂！'],[0,'祖地的厅堂，被人当了仓库？收复它。'],[1,'各族肯定也会来抢——正好，新账旧账一起算！']],
-  outro:[[1,'巨厅回归，炉火重燃。'],[0,'祖地在向族人召唤。'],[1,'王，老辈人说，厅堂底下还有更深的厅。'],[0,'那就一寸一寸凿下去。']],
   win:'巨厅回归，炉火重燃。祖地在向族人召唤。',
   dir:[
    {at:3, who:1, focus:'center', zoom:1.8, label:'祖地旧殿 · 收复',
@@ -3159,7 +2782,6 @@ dwarf:[
   ]},
  {name:'以少敌多', skel:'forgewars', foes:['human','dragon'], brief:'符文熔炉的炉火还烧着——谁握着熔炉，谁的刀就硬一分。以一当十！',
   d:[[1,'王！人类和天龙人联手围剿，占了好大一片地！'],[0,'人多有什么用。矮人从来是以一当十。'],[1,'而且咱们的符文熔炉还在山口烧着——握住它，全族的刀都会更硬！']],
-  outro:[[1,'包围圈被砸了个粉碎！'],[0,'人多有什么用。'],[0,'矮人从来是以一当十——今天是以一当百。']],
   win:'包围圈被砸了个粉碎。嘲笑者们开始睡不安稳了。',
   dir:[
    {at:3, who:1, focus:'forge', zoom:1.9, label:'符文熔炉 · 全军强化',
@@ -3168,15 +2790,12 @@ dwarf:[
   ]},
  {name:'铜墙铁壁', skel:'siege', foes:['dwarf','human'], brief:'前方坚城驻军翻倍、龟缩不出——一寸一寸凿开它！',
   d:[[1,'王，前面的坚城驻军翻倍，龟缩着不肯出来！'],[0,'龟缩？那就一寸一寸凿开它。矮人有的是耐心。'],[1,'爆破手准备！今天让他们见识什么叫凿墙专业户！']],
-  outro:[[1,'铜墙铁壁，凿穿了！'],[0,'矮人的字典里没有「攻不下」。'],[1,'王，要不要在墙上刻一行字？'],[0,'刻：凿墙专业户到此一游。']],
   win:'铜墙铁壁也被凿穿了。矮人的字典里没有"攻不下"。'},
  {name:'山谷冲锋', skel:'corridor', foes:['human','dragon'], brief:'山谷风声正紧，正宜冲锋——不绕路，堂堂正正碾过去！',
   d:[[0,'铜砧，听！山谷里风声正紧——适合冲锋。'],[1,'全军重装列队！让山谷听听矮人战靴的声音！'],[0,'正面碾过去。不绕路，不埋伏，堂堂正正！']],
-  outro:[[1,'山谷里全是咱的战吼声！'],[0,'堂堂正正碾过去的，才叫冲锋。'],[1,'王，他们说咱不会绕路。'],[0,'绕路是给不敢正面的人准备的。']],
   win:'山谷回荡着胜利的战吼。矮人的冲锋，势不可挡。'},
  {name:'荣誉决斗', skel:'regicide', foes:['dragon','human'], brief:'各族之王应战荣誉单挑——攻陷龙皇金帐，让嘲笑者低头。',
    d:[[1,'王！各族之王应战了——他们说，要跟咱"荣誉单挑"！'],[0,'单挑好啊。不过矮人的单挑，是全家一起上。'],[1,'听说他们掌握了秘术，王，咱也不能托大！']],
-  outro:[[1,'各族之王，在您面前低下了头。'],[0,'单挑？咱的锤子从不多话。'],[1,'王，他们问——这算荣誉吗？'],[0,'赢了就算。']],
   win:'各族之王在矮人面前低下了高贵的头颅。',
   dir:[
    {at:1.2, who:1, focus:'king', zoom:2.05, label:'斩首目标 · 龙皇金帐',
@@ -3185,7 +2804,6 @@ dwarf:[
   ]},
  {name:'让世界低头', skel:'boss', foes:['dragon','human'], brief:'攻陷嘲讽者联盟总堡垒——从此无人敢笑矮人！（小心脉冲预警圈）',
    d:[[1,'王！最后的目标——嘲讽者联盟的总堡垒！'],[0,'打下它，从此大陆上再没有人敢笑矮人矮。'],[1,'小心八秒一次的脉冲，红圈一亮就得撤！'],[0,'全军听令——让世界低头的最后一战，进攻！！']],
-  outro:[[1,'总堡垒陷落。世界安静了。'],[0,'铜砧，从此「矮」字前面加什么？'],[1,'伟大的，王。'],[0,'记住这个词。它是锤子砸出来的。']],
   win:'总堡垒陷落。从今往后，"矮"字之前，永远跟着"伟大的"。',
   dir:[
    {at:3, who:1, focus:'boss', zoom:1.75, label:'⚠ 占领即胜 · 八秒一脉冲',
@@ -3235,9 +2853,6 @@ const BRG = { cols:7, rows:3, river:3, bridgeRow:1, pad:1 };
 // 网格字符表：
 //   归属  v 中立村 / P 玩家大本营 / 2·3 两家敌方基地 / ~ 水（江·湖）
 //   障碍  ^ 山体（不可通行：与水共用 LAKES 阻挡，渲染成岩石堆）
-//   外海  . 这里没有地块 —— 用它手画有机海岸线（岛形/海湾），比自动椭圆雕刻可控得多。
-//         含 '.' 的图会跳过 carveFixedCoast，轮廓完全由网格决定。
-//         与水/山共用 LAKES 阻挡，但渲染时什么都不画 → 露出背景，等于"陆地之外的海"。
 //   建筑  B 碉堡(关隘·中立) / T 箭塔 / G 金顶塔 / X Boss要塞 / M 巨城 / K 王帐(归敌方2)
 //         S 龙神祭坛 / F 符文熔炉 / N 麦仓 / H 货栈 / Z 湖心宝箱
 //   兵营  a 弓兵营 / m 法师营 / r 盗贼营 / s 重械营
@@ -3246,16 +2861,10 @@ const BRG = { cols:7, rows:3, river:3, bridgeRow:1, pad:1 };
 //              bunkerCap/bunkerPop 碉堡容量驻军
 const LEVEL_MAPS={
   // —— 四个桥关（第五批手写，此处迁入通用表；岸上摆山体做点缀）——
-  // 批次F：原 7×3 扁平长条（江两岸各一行，整图是条横带）。改用 '.' 手画成被江劈开的
-  // 葫芦形陆块 —— 北岸宽、南岸窄，最宽处正好是桥行。江与外海连成一片（同为水色系），
-  // 海岸线描边负责把「陆地 / 江 / 外海」三者分开。
-  // 桥关铁律不变：江列(3)上下由 pad 外扩贯穿，全图只有 w-B-e 一条通路。
-  dusk:{ cols:7, rows:5, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // 人类 L2 渡口阻击
-    grid:['..v~vv.',
-          '.vv~v2.',
+  dusk:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // 人类 L2 渡口阻击
+    grid:['^vv~v2v',
           'vPwBevv',
-          '.vv~v3.',
-          '..v~v..'] },
+          'vvv~v3^'] },
   burn:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:28, bunkerPop:16, // 天龙 L2 焚断桥
     grid:['vvT~v2v',
           'vPwBevv',
@@ -3271,15 +2880,11 @@ const LEVEL_MAPS={
 
   // —— 第七批：四族 L1 教学关（原 teach 骨架共用同一张图，四族体验完全一样）——
   // 每张都摆了山/水当障碍：新手在第一关就该见到「地形会挡路、要绕」
-  // 批次F：改用 '.' 手画海岸线 —— 原先 6×4 满格矩形靠自动椭圆雕刻，只啃得掉四角（22% 上限），
-  // 主体仍是方块。现在挖成北宽南窄的半岛：玩家在南岸登陆，两家哥布林盘踞北岸，
-  // 中央麦田(N)是双方争夺的粮仓，岬角上的箭塔(T)卡住东侧陆桥。
-  h1:{ cols:7, rows:5,
-    grid:['..^vvv.',
-          '.vvNv3.',
-          'vPvvTvv',
-          '.vvvv2.',
-          '..vv^..'] },
+  h1:{ cols:6, rows:4,   // 人类 L1 烽火边境：团块布局，粮仓居中，四角山体啃出岛形
+    grid:['^vvv3v',
+          'vvvNvv',
+          'vPvvTv',
+          'vvvv2^'] },
   g1:{ cols:6, rows:4,   // 天龙 L1 蝼蚁的村庄：水塘横在村中，两角山体收边
     grid:['vvvv2^',
           'vv~vvv',
@@ -3413,17 +3018,9 @@ function buildFixedMap(cx,cy,mapId,md){
       x: cx + rx*step + (rng()-0.5)*step*JIT,
       y: cy + ry*step + (rng()-0.5)*step*JIT });
   };
-  M.grid.forEach((line,r)=>{ for(let c=0;c<cols;c++) put(c,r,line[c]===undefined ? 'v' : line[c]); });
+  M.grid.forEach((line,r)=>{ for(let c=0;c<cols;c++) put(c,r,line[c]||'v'); });
   // 桥图专用：江所在列上下各外扩 pad 格，让江贯穿出图外 —— 天险得真的绕不过去
   if(M.river!=null){ for(let k=1;k<=pad;k++){ put(M.river,-k,'~'); put(M.river,rows-1+k,'~'); } }
-
-  // 批次A：海岸线雕刻 —— 把手写矩形网格的边角啃成有机海岸。
-  // 保护字符（基地/建筑/兵营/桥面）不啃；每啃一格都做网格 BFS 连通校验；
-  // 被啃的格标 sea=true → 阻挡照旧（进 LAKES），渲染跳过湖面样式（那是外海）。
-  // 手写轮廓优先：网格里只要出现 '.'（外海），就说明形状是设计师画死的，
-  // 不再走自动海岸雕刻 —— 否则随机椭圆会把精心画的轮廓再啃歪一圈。
-  const handShaped = M.grid.some(l=>l.indexOf('.')>=0);
-  if(!handShaped) carveFixedCoast(M, seeds, step, rng);
 
   // Voronoi：种子互切出地块多边形（与随机关卡同一套算法，观感才一致）
   let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;
@@ -3444,16 +3041,15 @@ function buildFixedMap(cx,cy,mapId,md){
   }
   if(cells.length<12) return false;
 
-  LAKES=[]; MOUNTAINS=new Set(); SEACELLS=new Set();
+  LAKES=[]; MOUNTAINS=new Set();
   const pb=playerBuffs();
   for(const cc of cells){
     const s=cc.s, ch=s.ch;
-    // '~'=水（画湖面）'^'=山（画岩石）'.'=外海（什么都不画，露出背景）
-    // 三者共用同一套阻挡（都进 LAKES），区别只在渲染。
-    if(ch==='~'||ch==='^'||ch==='.'){
+    if(ch==='~'||ch==='^'){
+      // 山(^)与水(~)共用同一套阻挡：都进 LAKES，inLake / pairGate 一行不改。
+      // 区别只在渲染 —— 水画湖面，山画岩石堆（MOUNTAINS 记住引用）。
       LAKES.push(cc.cell);
       if(ch==='^') MOUNTAINS.add(cc.cell);
-      if(s.sea || ch==='.') SEACELLS.add(cc.cell);
       continue;
     }
     // 字符 → 属性。容量/驻军全部对齐随机路径 giveType 的口径，避免两套数值打架。
@@ -3527,43 +3123,36 @@ function buildMap(tplIn, mods){
   allyMode=false; allyHostile=false; holdState=null;
   dirQ=[]; dirBusy=false; cine=null; cineMarks=[]; battleSiegeToast=false; _betrayFired=false;
   killCaptureBy=0; lootGoalN=0; lootWinFired=false; forgeOwner=0;
-  // 局中演出（midCine）/ 尾声幕 / 败局反转：每局归位
-  midQ=[]; midSeq=null; midIdx=0; midWait=0; midHold=false; midBusy=false; midPausedByCine=false; midResume=false;
-  timeScale=1; timeScaleUntil=0; midBuffState={ atk:1, spd:1, until:0, owner:1 };
-  _outroDone=false; reviveUsed=false; pyrrhic=false;
   // 第二批剧情经济机制状态归位（过路费 / 刮金箔 / 麦仓腐烂 / 拆塔计数）
-  BRIDGE_CELLS=[]; tollAcc=0; tollFloatAt=-9; goldLeafAt=CFG.goldLeafStep; barnRotAt=CFG.barnRotDelay; demolishCount=0; grainRoadWas=false;
+  BRIDGE_CELLS=[]; tollAcc=0; tollFloatAt=-9; goldLeafAt=CFG.goldLeafStep; barnRotAt=CFG.barnRotDelay; demolishCount=0;
   BURNED=new Set(); bridgeBurned=false;           // 焚桥：每局重来，断掉的边不跨局残留
   lastStand={ used:false, until:0, peak:1 };   // 绝地反击状态归位
   guide=null; aiFrozen=false;                   // 可操控引导随旧局一并清场
   demProgP=null;                                // 拆塔长按进度随旧局一并清场
   curTpl = tplIn || pickTemplate();
-  LAKES=[]; MOUNTAINS=new Set(); SEACELLS=new Set(); GATES=new Map(); DISTM=null; LANDMASK=null; COAST=null;
+  LAKES=[]; MOUNTAINS=new Set(); GATES=new Map(); DISTM=null; LANDMASK=null;
   const cx=W/2, cy=G_TOP+(H-G_TOP)/2;
   const R=Math.min(W,H-G_TOP);
 
   // 树状大地图：主枝数随机（2=X型 3=Y型 4~5=树杈），建图失败逐步放宽重试；
   // 整轮 plans 全败则再来一轮（极小概率），确保必定产出一张完整可玩的图
   // 第七批地基：地图放大。格数与 minD² 成反比（minD = R*0.145*dense），
-  // 批次A 再放大一档（配合轮廓层与常驻相机）：dense 整体下调，目标 22~28 格。
+  // 目标 18~22 格 ≈ 原来的 1.5 倍 → dense 要从 1.00 降到约 1/sqrt(1.5) ≈ 0.82。
   // 三档现在是「密度递增 ladder」：不够大就往更密的档升级，而不是等建图失败才换。
   const plans=[
-    {branches:null, ponds:1,  keepR:1.00, dense:0.86},
-    {branches:null, ponds:0,  keepR:1.15, dense:0.78},
-    {branches:3,    ponds:0,  keepR:1.30, dense:0.70},
+    {branches:null, ponds:1,  keepR:1.00, dense:0.90},
+    {branches:null, ponds:0,  keepR:1.15, dense:0.82},
+    {branches:3,    ponds:0,  keepR:1.30, dense:0.74},
   ];
-  // 批次A收尾档（仅 S 模板）：碎群岛/三角洲被海岸线裁得多，0.70 档仍可能凑不满 minCells。
-  // M 模板不加——更密的图会把 M3 桥腰加宽，咽喉割点变少（实测地形断言翻车）。
-  if(S_SHAPES.has(curTpl)) plans.push({branches:3, ponds:0, keepR:1.30, dense:0.62});
   SHAPE=null;   // 地形塑形几何（桥图分侧用），每局重算
-  // 桥形/走廊图会被裁掉一部分，底线抬高，免得生成出只有十来格的空壳图
-  let minCells = (curTpl==='M3' || curTpl==='M4' || curTpl==='M5') ? 22 : 22;
+  // 桥形/走廊图会被裁掉一部分，底线抬高到 10 格，免得生成出只有 8 格的空壳图
+  let minCells = (curTpl==='M3' || curTpl==='M4' || curTpl==='M5') ? 18 : 18;
   // 要挖湖的关卡得先够大。湖是按「最靠中心的格」往外挖的，图太小既挖不出湖形，
   // 还会直接撞上 lakeBig 的 nodes.length>=10 门槛 —— 实测 L8 三关有 3/8 概率只长出 8~9 格，
   // 结果是整关一滴水都没有，关卡名（三岔口 / 三面合围）与地图对不上。
   // 抬高底线让建图重试，比事后放宽挖湖门槛更安全（8 格的图再挖掉 2 格就没法玩了）。
   // 挖湖要按「最靠中心的格」往外挖，图小了既挖不出湖形又会撞上 lakeBig 的门槛 → 湖关再抬 2 格
-  if(md && (md.lakeBig || md.lakePrize)) minCells = Math.max(minCells, 24);
+  if(md && (md.lakeBig || md.lakePrize)) minCells = Math.max(minCells, 20);
   // 重试改为「保留最大的一张图」。原先是最后一轮说了算，实测出现过越重试越小的怪事
   //（第一轮 15 格、第二轮只有 9 格，最终却用了 9 格）。对要挖湖的关卡尤其致命：
   // 图一小就整关没水。这里把每轮结果都留个底，够了就停，不够就取历次最大的那张。
@@ -3586,7 +3175,7 @@ function buildMap(tplIn, mods){
         if(!tryBuildMap(cx,cy,R,P,md,curTpl)) continue;      // 建图失败 → 试下一档
         if(!bestShot || nodes.length>bestShot.n){
           bestShot={ n:nodes.length, nodes:nodes.slice(), LAKES:LAKES.slice(),
-                     GEO:M4_GEO?{...M4_GEO}:null, SHAPE:SHAPE?{...SHAPE}:null, COAST };
+                     GEO:M4_GEO?{...M4_GEO}:null, SHAPE:SHAPE?{...SHAPE}:null };
         }
         if(nodes.length>=minCells) break;                     // 够大 → 停，不再升级密度
       }
@@ -3594,7 +3183,7 @@ function buildMap(tplIn, mods){
     }
   }
   if(bestShot && bestShot.n>nodes.length){
-    nodes=bestShot.nodes; LAKES=bestShot.LAKES; M4_GEO=bestShot.GEO; SHAPE=bestShot.SHAPE; COAST=bestShot.COAST;
+    nodes=bestShot.nodes; LAKES=bestShot.LAKES; M4_GEO=bestShot.GEO; SHAPE=bestShot.SHAPE;
     buildAdjacency();   // 下标已回到旧图的排列，重建邻接表与关卡点
   }
 
@@ -3612,7 +3201,6 @@ function buildMap(tplIn, mods){
       GATES.forEach(T);
       for(const L of LAKES) for(const p of L) T(p);
       if(M4_GEO){ M4_GEO.cx+=ox; M4_GEO.cy+=oy; }   // 堡垒中心同步平移，否则后续按中心取格会取偏
-      translateCoast(ox,oy);                        // 海岸线同步平移（轮廓层，批次A）
     }
   }
 
@@ -3621,20 +3209,6 @@ function buildMap(tplIn, mods){
   buildLandMask();
   ensureBridgeCell();          // 兜底：居中平移后若桥面又空了（理论上不会），再补一次
   BRIDGE_CELLS = nodes.filter(n=>n.onBridge);
-
-  // 批次A 常驻相机：按最终陆地+水域包围盒计算「全景归位点」与平移边界。
-  // 大地图 home  zoom 会小于 1（整图尽收眼底），双击/双指复位都回到这里。
-  if(nodes.length>=8){
-    let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;
-    const eat=p=>{ if(p.x<bx0)bx0=p.x; if(p.x>bx1)bx1=p.x; if(p.y<by0)by0=p.y; if(p.y>by1)by1=p.y; };
-    for(const n of nodes) for(const p of n.poly) eat(p);
-    for(const L of LAKES) for(const p of L) eat(p);
-    MAPBB={x0:bx0,y0:by0,x1:bx1,y1:by1};
-    const bw=(bx1-bx0)+96, bh=(by1-by0)+96;
-    const z=Math.max(CFG.camMinZoom, Math.min(1.12, Math.min(W/bw, (H-G_TOP)/bh)));
-    camHome={ x:(bx0+bx1)/2, y:(by0+by1)/2 - (G_TOP/2)/z, zoom:z };
-    cam={...camHome}; camUser=false; camVel={x:0,y:0};
-  }
 }
 
 // 单次建图尝试（树状版）；成功返回 true。md=战役修饰词（特殊建筑数量表 / boss / megaCap 等）
@@ -3644,13 +3218,10 @@ function tryBuildMap(cx,cy,R,P,md,tpl){
   nodes=[];   // 每次尝试先清空：失败尝试残留的旧地块若混入下次建图，会与新地块重叠（今日挑战重叠 bug 根因）
 
   // 1) 陆地骨架（X / Y / 树状脊柱）—— 先清掉上一局残留的湖
-  LAKES=[]; MOUNTAINS=new Set(); SEACELLS=new Set();
+  LAKES=[]; MOUNTAINS=new Set();
   M4_GEO=null;   // 塑形几何随每次建图重算；失败重试时不能沿用上一次的中心
   const minD=R*0.145*P.dense;
-  // 批次A：S 模板走轮廓层（脊柱+海岸同源），M 模板走原骨架
-  let spineMeta=null, spine;
-  if(S_SHAPES.has(tpl)){ const g=genCoastSpine(tpl,cx,cy,minD*1.02); spine=g.pts; spineMeta=g.meta; }
-  else spine=genSkeleton(cx,cy,minD*1.02,P.branches,tpl);
+  const spine=genSkeleton(cx,cy,minD*1.02,P.branches,tpl);
   if(spine.length<8) return false;
 
   // 1.5) 整图适配：骨架按屏幕安全区等比缩放并居中 → 无论长成什么形状都完整可见、视觉居中
@@ -3665,17 +3236,7 @@ function tryBuildMap(cx,cy,R,P,md,tpl){
     // 堡垒几何跟着一起走，否则 applyTerrainShape 会拿着缩放前的中心去裁缩放后的图。
     // 角度是各向同性缩放，不受影响，只需平移缩放中心点。
     if(M4_GEO){ M4_GEO.cx=M4_GEO.cx*sc+ox; M4_GEO.cy=M4_GEO.cy*sc+oy; }
-    // 轮廓层 meta 里的「不在脊柱上」的几何点（海湾圆心/岛团心）同样跟着走；
-    // 标量几何（弧半径/环半径）也要乘缩放系数，否则海岸掏空与弧带对不上
-    if(spineMeta){
-      if(spineMeta.extra){ for(const p of spineMeta.extra){ p.x=p.x*sc+ox; p.y=p.y*sc+oy; } }
-      if(spineMeta.scalars){ for(const k of spineMeta.scalars){ spineMeta[k]*=sc; } }
-    }
   }
-
-  // 1.6) 大陆架轮廓层（批次A）：按缩放后的脊柱几何刻海岸线，候选格落在海外的一律当海丢掉
-  COAST = (S_SHAPES.has(tpl) && spineMeta) ? buildCoast(tpl, spine, minD, spineMeta) : null;
-  const coastOk = p => !COAST || COAST.test(p.x,p.y);
 
   // 2) 候选格心 = 脊柱种子（微抖动）+ 全域泊松填充；离脊柱远的填充格之后当海丢掉
   const keepRad=minD*0.66*P.keepR;
@@ -3705,7 +3266,7 @@ function tryBuildMap(cx,cy,R,P,md,tpl){
       if(cell.length<3) break;
     }
     if(cell.length<3) continue;
-    cells.push({center, cell, cg:polygonCentroid(cell), keep:distSpine(center)<keepRad && coastOk(center) && coastOk(polygonCentroid(cell))});
+    cells.push({center, cell, cg:polygonCentroid(cell), keep:distSpine(center)<keepRad});
   }
 
   // 4) 收割陆格 + 小格淘汰 + 两轮"填凹"：被两块陆地夹着的凹口补成陆地 → 海岸线整洁不稀碎
@@ -3713,7 +3274,7 @@ function tryBuildMap(cx,cy,R,P,md,tpl){
   for(let iter=0;iter<2;iter++){
     const adds=[];
     for(const c of cells){
-      if(!c.keep && distSpine(c.center)<keepRad*1.5 && coastOk(c.center) && coastOk(c.cg)){
+      if(!c.keep && distSpine(c.center)<keepRad*1.5){
         let nbr=0;
         for(const L of lands){ if(dist(c.center,L.center)<minD*1.28 && ++nbr>=2) break; }
         if(nbr>=2) adds.push(c);
@@ -4002,11 +3563,6 @@ function tryBuildMap(cx,cy,R,P,md,tpl){
     const picks=shuffleArr(freeNeu()).slice(0,md.barns);
     for(const b of picks){ b.type='barn'; b.cap=45; b.pop=Math.round(45*0.5); b.growMul=1.5; specialUsed.add(b); }
   }
-  if(md && md.frontCastle){    // 人类·前线城堡（批次C·粮道）：占着它的势力，农舍产速 ×1.5
-    // 摆位挑「前线」：离图心最近的自由中立村——开局三方都能抢，抢到就掌粮道
-    const picks=freeNeu().slice().sort((a,b)=>dist(a,{x:cx,y:cy})-dist(b,{x:cx,y:cy})).slice(0,md.frontCastle);
-    for(const fc of picks){ fc.type='fcastle'; fc.cap=40; fc.pop=Math.round(40*0.5); specialUsed.add(fc); }
-  }
   if(md && md.stalls){         // 哥布林·货栈：首占 +8 金币入战利品箱
     const picks=shuffleArr(freeNeu()).slice(0,md.stalls);
     for(const st of picks){ st.type='stall'; st.cap=Math.max(st.cap,20); st.stallGold=8; specialUsed.add(st); }
@@ -4150,8 +3706,6 @@ function unitStats(owner, cls){
   atk *= gb.atk; spd *= gb.spd;
   // 矮人·符文熔炉（种族专属建筑）：占领方全军攻击 +12%（争夺点，AI 占领时同样生效）
   if(forgeOwner && owner===forgeOwner) atk *= 1.12;
-  // 局中演出增益（midCine buff）：剧情给的临时全军加成，到期自动失效
-  if(midBuffOn(owner)){ atk *= midBuffState.atk; spd *= midBuffState.spd; }
   // 种族分支树（仅玩家 owner===1 生效；AI 不吃养成）
   if(isPlayer){
     const rk = race;
@@ -4913,12 +4467,6 @@ function burnBridge(){
 }
 
 // ===================== 主循环 =====================
-// 粮道（批次C）：当前占着前线城堡的势力集合——农舍产速加成按此判定（也供测试断言）
-function grainOwners(){
-  const s=new Set();
-  for(const n of nodes){ if(n.type==='fcastle' && n.owner>0) s.add(n.owner); }
-  return s;
-}
 function update(dt){
   // 0) 震屏衰减 + 龙威威压圈缓存（种族被动，任何难度都生效）
   if(shake > 0) shake = Math.max(0, shake - dt);
@@ -4939,24 +4487,11 @@ function update(dt){
   // 0.5) v4 剧情机制：同盟反水判定 → 导演剧本触发（战斗内引导）
   checkBetrayal();
   dirTick();
-  midTick();   // 局中触发演出（midCine）：占领/计时/濒危等条件命中即播，每条只触发一次
   tickDemolish();   // 第二批拆塔动作：长按己方箭塔判定（不依赖指针移动，桌面按住不动也能触发）
 
   // 1) 产兵（整数化：按容量累积，满 1 兵才 +1；超 cap 不再自然增长）
   //    玩家吃"产兵加速"养成，AI 吃难度倍率；「蝗灾」事件全场产速 ×0.5
   const pb = playerBuffs();
-  // 人类·粮道（批次C）：谁占着前线城堡，谁的农舍产速 ×1.5——各势力独立判定，城堡易主补贴跟着易主
-  const grainRoad = grainOwners();
-  if(lvCtx && lvCtx.mods.frontCastle){
-    const g1 = grainRoad.has(1);
-    if(g1 !== grainRoadWas){
-      grainRoadWas = g1;
-      if(gameTime > 0.5){   // 开场帧不算得失，免刷提示
-        if(g1){ showToast('🌾','粮道贯通','前线城堡已夺——农舍产兵 +50%',2.4); Sfx.play('conquer'); }
-        else { showToast('⚠','粮道被切断','前线城堡失守——农舍补贴失效',2.4); Sfx.play('hit'); }
-      }
-    }
-  }
   for(const n of nodes){
     if(n.owner===0) continue; // 中立不产
     if(n.boss || n.kingsTent || n.sanctum) continue;   // Boss 要塞 / 王帐 / 龙神祭坛：不自然增长
@@ -4965,7 +4500,6 @@ function update(dt){
       if(evActive && evActive.id==='locust') prodMul *= 0.5;
       prodMul *= (n.growMul||1);                              // 大麦仓（人类专属）：产速 ×1.5
       if(n.owner===1 && lastStand.until > gameTime) prodMul *= 2;   // 绝地反击：最后一城产能 ×2
-      if(n.type==='village' && grainRoad.has(n.owner)) prodMul *= CFG.grainRoadMul;  // 人类·粮道：占前线城堡，农舍产速 ×1.5
       if(n.owner===1 && factionOf[1]==='goblin'){             // 哥布林树：繁殖狂热 +8%/级；速生速用新占据点 10s ×2
         prodMul *= 1 + 0.08*nodeLv('goblin','breed');
         if(n.rushUntil && n.rushUntil > gameTime) prodMul *= 2;
@@ -5530,94 +5064,16 @@ function drawPath(poly, wob){
   ctx.closePath();
 }
 
-// ===================== 批次B · 生态皮肤（BIOMES） =====================
-// 四族各一套「生态五件套」：水面渐变 / 地色 / 湖色 / 山体 / 装饰簇+粒子（MAP-REDESIGN-PROPOSAL §3）。
-// light = 既有深炭通用主题（自由对战/每日/rogue 默认），保持原观感；
-// 战役按 campRace 解析，关卡可用 lvDef.biome 覆盖（批次C 逐关分配）。纯渲染层，零逻辑影响。
-const BIOMES = {
-  light: {
-    bg:['#17181b','#0c0d0f'], grid:'rgba(255,255,255,0.032)',
-    sh1:'rgba(96,140,148,0.10)', sh2:'rgba(130,175,178,0.13)',
-    shadow:'#232529', land:'#232529', neutral:'#26282d', tint:'26',
-    edge:'rgba(255,255,255,0.10)',
-    lake:{fill:'#0c171b', stroke:'#1e3840', inner:'#112229', ripple:'255,255,255'},
-    mount:{base:'#34373d', rock:'255,255,255', rockStroke:'rgba(0,0,0,0.38)', top:null},
-    mote:'rgba(255,250,180,0.22)',
-    kinds:[['rock',28],['deadwood',24],['grass',26],['tree',22]],
-    pal:{ rockFill:'rgba(255,255,255,0.055)', rockEdge:'rgba(0,0,0,0.32)', wood:'rgba(0,0,0,0.40)',
-          grass:'rgba(140,190,150,0.30)', crown:'rgba(58,92,66,0.55)', crownHi:'rgba(255,255,255,0.07)',
-          trunk:'rgba(0,0,0,0.42)' },
-  },
-  human: {   // 沃土田园
-    bg:['#3d6b6f','#2a4a50'], grid:'rgba(255,255,255,0.05)',
-    sh1:'rgba(126,178,168,0.12)', sh2:'rgba(126,178,168,0.18)',
-    shadow:'#202a22', land:'#4a5a3a', neutral:'#536144', tint:'66',
-    edge:'rgba(22,32,18,0.35)',
-    lake:{fill:'#27505a', stroke:'#3f7a80', inner:'#1f424a', ripple:'214,240,232'},
-    mount:{base:'#55645c', rock:'196,214,198', rockStroke:'rgba(20,28,22,0.4)', top:'#5a7a4a'},
-    mote:'rgba(240,230,192,0.25)',
-    kinds:[['wheat',32],['tree',26],['grass',27],['rock',15]],
-    pal:{ rockFill:'rgba(230,240,225,0.10)', rockEdge:'rgba(24,34,20,0.4)', wood:'#4a3a22',
-          grass:'rgba(170,200,120,0.55)', crown:'#2f4a26', crownHi:'rgba(120,160,90,0.5)',
-          trunk:'#4a3a22', wheat:'#d9b64a', wheatEdge:'#a8842a' },
-  },
-  goblin: {  // 荒原峡谷
-    bg:['#6b5a42','#4a3f30'], grid:'rgba(0,0,0,0.05)',
-    sh1:'rgba(190,164,120,0.12)', sh2:'rgba(190,164,120,0.17)',
-    shadow:'#33291d', land:'#8a6b42', neutral:'#8f7350', tint:'66',
-    edge:'rgba(52,36,18,0.35)',
-    lake:{fill:'#4a5232', stroke:'#5c6640', inner:'#3e452a', ripple:'230,220,180'},
-    mount:{base:'#8a4c30', rock:'238,190,150', rockStroke:'rgba(60,32,16,0.45)', top:'#c07a4a'},
-    mote:'rgba(216,192,144,0.28)',
-    kinds:[['deadwood',30],['bones',18],['cactus',20],['rock',32]],
-    pal:{ rockFill:'rgba(255,214,170,0.10)', rockEdge:'rgba(52,30,14,0.42)', wood:'#3a2c1c',
-          bones:'#e8e0d0', cactus:'#4a7a3a', cactusHi:'#6a9a52' },
-  },
-  dragon: {  // 灰烬高地
-    bg:['#2a2035','#1a1424'], grid:'rgba(255,255,255,0.04)',
-    sh1:'rgba(120,88,130,0.12)', sh2:'rgba(150,100,140,0.15)',
-    shadow:'#171214', land:'#3d3230', neutral:'#453936', tint:'66',
-    edge:'rgba(255,190,140,0.14)',
-    lake:{fill:'#c9521a', stroke:'#ffb347', inner:'#e06a1e', ripple:'255,220,160'},
-    mount:{base:'#241f26', rock:'150,120,150', rockStroke:'rgba(0,0,0,0.5)', top:'#e06a1e'},
-    mote:'rgba(255,140,58,0.38)',
-    kinds:[['crystal',28],['ribs',20],['deadwood',24],['rock',28]],
-    pal:{ rockFill:'rgba(190,150,190,0.08)', rockEdge:'rgba(0,0,0,0.5)', wood:'#241a16',
-          bones:'#cfc6b8', crystal:'#ff7a2a', crystalDark:'#c9521a' },
-  },
-  dwarf: {   // 雪山矿脉
-    bg:['#4a6470','#32434d'], grid:'rgba(255,255,255,0.05)',
-    sh1:'rgba(150,180,192,0.14)', sh2:'rgba(180,205,218,0.18)',
-    shadow:'#3a444b', land:'#8a949c', neutral:'#939da5', tint:'66',
-    edge:'rgba(48,58,66,0.4)',
-    lake:{fill:'#9cc4dc', stroke:'#e8f4fa', inner:'#b8d8ea', ripple:'255,255,255'},
-    mount:{base:'#6f7880', rock:'235,242,248', rockStroke:'rgba(50,58,66,0.45)', top:'#f4f8fb'},
-    mote:'rgba(255,255,255,0.55)',
-    kinds:[['crystal',26],['pine',26],['rock',30],['snowtuft',18]],
-    pal:{ rockFill:'rgba(255,255,255,0.14)', rockEdge:'rgba(48,56,64,0.4)',
-          crystal:'#a8d8f0', crystalDark:'#8ac0e0', pine:'#33503f', snow:'#f4f8fb',
-          grass:'rgba(235,242,248,0.5)' },
-  },
-};
-let curBiome='light';
-function biome(){ return BIOMES[curBiome] || BIOMES.light; }
-function resolveBiome(lvDef){
-  if(lvDef && lvDef.biome && BIOMES[lvDef.biome]) return lvDef.biome;
-  if(lastMode==='camp' && BIOMES[campRace]) return campRace;
-  return 'light';
-}
-
 function draw(){
   ctx.clearRect(0,0,W,H);
-  const B=biome();
 
-  // 0) 战场底色：生态双色渐变（缓存） + 暗角 + 蓝图网格，让大陆"浮"在水面上
-  const key = W+"|"+H+"|"+curBiome;
+  // 0) 战场底色：深炭工业渐变（缓存） + 暗角 + 蓝图网格，让树状大陆"浮"在作战沙盘上
+  const key = W+"|"+H;
   if(key !== bgKey){
     bgKey = key;
     bgGrad = ctx.createLinearGradient(0,0,0,H);
-    bgGrad.addColorStop(0, B.bg[0]);
-    bgGrad.addColorStop(1, B.bg[1]);
+    bgGrad.addColorStop(0, "#17181b");
+    bgGrad.addColorStop(1, "#0c0d0f");
   }
   ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
   // 暗角径向渐变按 W|H 缓存（与背景渐变同策略，不再每帧重建）
@@ -5630,7 +5086,7 @@ function draw(){
   }
   ctx.fillStyle = _vg.grad; ctx.fillRect(0,0,W,H);
   // 工业网格：低对比蓝图网格线（作战地图的坐标感）
-  ctx.strokeStyle = B.grid;
+  ctx.strokeStyle = "rgba(255,255,255,0.032)";
   ctx.lineWidth = 1;
   ctx.beginPath();
   for(let gx=(W%48)/2; gx<W; gx+=48){ ctx.moveTo(gx,0); ctx.lineTo(gx,H); }
@@ -5641,11 +5097,12 @@ function draw(){
   ctx.save();
   if(shake > 0){ const s = shake*22; ctx.translate(rand(-s,s), rand(-s,s)); }
 
-  // 常驻相机（批次A）：始终以 cam 为中心变出世界层。
-  // cam==camHome 且 zoom=1 时是恒等变换；平移/缩放/终局推镜/导演聚焦都走这一条路。
-  ctx.translate(W/2, H/2);
-  ctx.scale(cam.zoom, cam.zoom);
-  ctx.translate(-cam.x, -cam.y);
+  // 终局镜头：zoom>1 时以 cam 为中心放大世界层（zoom=1 为恒等变换，不影响常规画面）
+  if(cam.zoom > 1.0005){
+    ctx.translate(W/2, H/2);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-cam.x, -cam.y);
+  }
 
   // 0.5) 岛屿浅滩：把每块陆地以质心放大两档画出来（相邻格自然融合成 union），
   //      形成「深水 → 外滩 → 近岸 → 陆地」的海岸过渡。参考图（State.io 等）都有这一圈，
@@ -5659,7 +5116,7 @@ function draw(){
       if(i) ctx.lineTo(x,y); else ctx.moveTo(x,y);
     }
     ctx.closePath();
-    ctx.fillStyle=B.sh1; ctx.fill();
+    ctx.fillStyle="rgba(96,140,148,0.10)"; ctx.fill();
   }
   for(const n of nodes){
     const cg = polygonCentroid(n.poly);
@@ -5670,26 +5127,16 @@ function draw(){
       if(i) ctx.lineTo(x,y); else ctx.moveTo(x,y);
     }
     ctx.closePath();
-    ctx.fillStyle=B.sh2; ctx.fill();
+    ctx.fillStyle="rgba(130,175,178,0.13)"; ctx.fill();
   }
 
   // 1) 陆地投影：所有地块合成一条路径 → 阴影只落在外轮廓，树状大陆整体浮起
-  // 1.5) 海岸线：同一条路径描一圈滩涂粗边。先描后铺色（见 pass 1）——
-  //      内部共享边的滩涂会被相邻地块的填充盖掉，只剩真正的外轮廓露出来。
-  //      这圈边同时勾出「陆↔湖」「陆↔江」「陆↔外海」三种边界：
-  //      此前湖水色与背景海同属青色系，水陆糊成一片，靠这一圈才分得开。
   ctx.beginPath();
   for(const n of nodes) drawPath(n.poly, 1);
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 8;
-  ctx.fillStyle = B.shadow; ctx.fill();
+  ctx.fillStyle = "#232529"; ctx.fill();
   ctx.restore();
-  if(B.coast){
-    ctx.save();
-    ctx.lineJoin="round"; ctx.lineWidth=9;
-    ctx.strokeStyle = B.coast; ctx.stroke();
-    ctx.restore();
-  }
 
   // 2) 地表颗粒纹理 + 漂浮微尘氛围
   drawIslandGrain();
@@ -5698,23 +5145,21 @@ function draw(){
   // 3) 地块绘制（两遍分离：先全部铺色 → 再统一描边）
   //    共享边只有一条干净细线，杜绝"描边互相压色"造成的重叠观感
   ctx.lineJoin="round";
-  for(const n of nodes){                      // pass 1：铺生态地色 + 归属薄涂
+  for(const n of nodes){                      // pass 1：铺底色
     ctx.beginPath(); drawPath(n.poly, 1);
-    ctx.fillStyle = n.owner ? B.land : B.neutral;
+    ctx.fillStyle = n.owner ? colOf(n.owner)+"26" : "#26282d";
     ctx.fill();
-    if(n.owner){ ctx.fillStyle = colOf(n.owner)+B.tint; ctx.fill(); }
   }
   for(const n of nodes){                      // pass 2：描边
     ctx.beginPath(); drawPath(n.poly, 1);
-    ctx.lineWidth = 1.1; ctx.strokeStyle = B.edge; ctx.stroke();
+    ctx.lineWidth = 1.1; ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.stroke();
     if(n.owner){
       ctx.lineWidth = 2.2; ctx.strokeStyle = colOf(n.owner)+"aa"; ctx.stroke();
     }
   }
 
-  // 3.25) 地表装饰（生态装饰簇）：离屏缓存一次烘焙，相机变换下直接贴图（提案风险#2 性能阀）
-  renderDecorCache();
-  if(DECOR_CV) ctx.drawImage(DECOR_CV, DECOR_OX, DECOR_OY, DECOR_W, DECOR_H);
+  // 3.25) 地表装饰（岩石 / 枯木）：铺在地块之上、焦土与单位之下
+  drawProps();
 
   // 3.2) 焚桥焦土：烧过的桥面铺焦黑 + 余烬明灭，一眼看出这条线断了
   for(const n of nodes){
@@ -5735,24 +5180,23 @@ function draw(){
   }
 
   // 3.5) 湖泊：盖在地块之上形成清晰空洞，带浅水内圈与缓慢水纹
-  //      山体(^)也在 LAKES 里参与阻挡，但外观走下面的岩石 pass，这里跳过；
-  //      外海格（SEACELLS，海岸雕刻啃出来的）同样跳过——那是背景海，不是内陆湖。
+  //      山体(^)也在 LAKES 里参与阻挡，但外观走下面的岩石 pass，这里跳过
   LAKES.forEach((L,k)=>{
-    if(MOUNTAINS.has(L) || SEACELLS.has(L)) return;
+    if(MOUNTAINS.has(L)) return;
     const cg=polygonCentroid(L);
     ctx.beginPath(); drawPath(L, 1);   // 湖岸与地块共享边，必须一起弯，否则会裂缝
-    ctx.fillStyle=B.lake.fill; ctx.fill();
-    ctx.lineWidth=3; ctx.strokeStyle=B.lake.stroke; ctx.stroke();
+    ctx.fillStyle="#0c171b"; ctx.fill();
+    ctx.lineWidth=3; ctx.strokeStyle="#1e3840"; ctx.stroke();
     ctx.beginPath();
     for(let i=0;i<L.length;i++){
       const px=cg.x+(L[i].x-cg.x)*0.72, py=cg.y+(L[i].y-cg.y)*0.72;
       if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
     }
     ctx.closePath();
-    ctx.fillStyle=B.lake.inner; ctx.fill();
+    ctx.fillStyle="#112229"; ctx.fill();
     const rr=((gameTime*10)+(k*37))%46;
     ctx.beginPath(); ctx.arc(cg.x,cg.y,8+rr,0,Math.PI*2);
-    ctx.lineWidth=1.2; ctx.strokeStyle=`rgba(${B.lake.ripple},${Math.max(0,0.35*(1-rr/46))})`; ctx.stroke();
+    ctx.lineWidth=1.2; ctx.strokeStyle=`rgba(255,255,255,${Math.max(0,0.35*(1-rr/46))})`; ctx.stroke();
   });
 
   // 3.55) 山体：灰岩石堆（参考图第三课：障碍物直接长在地图中间）。
@@ -5762,8 +5206,8 @@ function draw(){
     let rMax=0; for(const p of mPoly){ const d=Math.hypot(p.x-cg.x,p.y-cg.y); if(d>rMax)rMax=d; }
     ctx.save();
     ctx.beginPath(); drawPath(mPoly, 1); ctx.clip();       // 岩石只落在山体格内
-    ctx.fillStyle=B.mount.base; ctx.fill();
-    ctx.lineWidth=1.4; ctx.strokeStyle=B.edge; ctx.stroke();
+    ctx.fillStyle="#34373d"; ctx.fill();
+    ctx.lineWidth=1.4; ctx.strokeStyle="rgba(255,255,255,0.10)"; ctx.stroke();
     const rr=mulberry32(((Math.round(cg.x*7)+Math.round(cg.y*13))|0)>>>0);
     const n=6+Math.floor(rr()*5);
     for(let k=0;k<n;k++){
@@ -5777,17 +5221,9 @@ function draw(){
         if(q) ctx.lineTo(qx,qy); else ctx.moveTo(qx,qy);
       }
       ctx.closePath();
-      ctx.fillStyle="rgba("+B.mount.rock+","+(0.05+rr()*0.06).toFixed(3)+")";
+      ctx.fillStyle="rgba(255,255,255,"+(0.05+rr()*0.06).toFixed(3)+")";
       ctx.fill();
-      ctx.lineWidth=0.8; ctx.strokeStyle=B.mount.rockStroke; ctx.stroke();
-      if(B.mount.top){   // 山体生态顶饰：雪顶/苔顶/熔岩尖
-        ctx.beginPath();
-        ctx.moveTo(px-rad*0.5, py-rad*0.22);
-        ctx.lineTo(px, py-rad*0.62);
-        ctx.lineTo(px+rad*0.5, py-rad*0.22);
-        ctx.closePath();
-        ctx.fillStyle=B.mount.top; ctx.fill();
-      }
+      ctx.lineWidth=0.8; ctx.strokeStyle="rgba(0,0,0,0.38)"; ctx.stroke();
     }
     ctx.restore();
   });
@@ -6123,20 +5559,19 @@ function drawAmbient(){
     const x = s.x + Math.sin(gameTime*s.sp + s.ph)*s.amp;
     const y = s.y + Math.cos(gameTime*s.sp*0.7 + s.ph)*s.amp*0.5;
     ctx.beginPath(); ctx.arc(x, y, s.r, 0, Math.PI*2);
-    ctx.fillStyle = biome().mote; ctx.fill();
+    ctx.fillStyle = "rgba(255,250,180,0.22)"; ctx.fill();
   }
 }
-// 地表装饰：按生态皮肤（BIOMES[curBiome].kinds 权重表）抽装饰词缀，四族各一套：
-// 人类=麦田/橡树/草丛，哥布林=枯木/白骨/仙人掌，天龙=烬晶/龙骸/焦木，矮人=冰晶/雪松/雪窝。
-// 纯视觉，不参与任何判定。确定性生成：种子取格心坐标 → 同一张图每次重建完全一致。
+// 地表装饰：岩石 / 枯木。纯视觉，不参与任何判定（不影响点击、寻路、判定半径）。
+// 确定性生成：种子取格心坐标 → 同一张图每次重建位置完全一致，不会每局乱跳。
+// 生成时按 poly 做一次内含判定，保证装饰不会跑到地块外面（湖里/图外）。
 let PROPS=[], PROPS_KEY='';
 function makeProps(){
-  const key = W+"|"+H+"|"+nodes.length+"|"+(curTpl||'')+"|"+curBiome;
+  const key = W+"|"+H+"|"+nodes.length+"|"+(curTpl||'');
   if(key === PROPS_KEY) return;
   PROPS_KEY = key;
   PROPS=[];
   if(!nodes.length) return;
-  const kinds=biome().kinds;
   for(let i=0;i<nodes.length;i++){
     const n=nodes[i];
     // 碉堡 / Boss 要塞 / 王帐 这类有徽标的格子不摆东西，免得压住图标
@@ -6148,39 +5583,17 @@ function makeProps(){
       const ang=rr()*6.283, t=0.30+rr()*0.52;        // 避开格心（数字与徽标区）
       const px=n.x+Math.cos(ang)*n.rad*t, py=n.y+Math.sin(ang)*n.rad*t;
       if(!insidePoly({x:px,y:py}, n.poly)) continue;
-      let roll=rr()*100, kind=kinds[kinds.length-1][0];
-      for(const [kn,w] of kinds){ if(roll<w){ kind=kn; break; } roll-=w; }
+      const roll=rr();
+      const kind = roll<0.28 ? 0 : roll<0.52 ? 1 : roll<0.78 ? 2 : 3;   // 岩/枯木/草/树
       PROPS.push({ x:px, y:py, r:3.5+rr()*5, kind, a:rr()*6.283, w:0.6+rr()*0.6, s:0.8+rr()*0.5 });
-      if(PROPS.length>=260) return;                  // 装饰总数硬上限（小屏性能阀）
     }
   }
 }
-// 装饰离屏缓存：装饰静态不变，烘一张画布按相机变换直接贴，避免每帧重绘几十组路径。
-// 换图/换生态/变分辨率时重建；1.5x 超采样，相机放大到 2.5x 装饰仍不糊。
-let DECOR_CV=null, DECOR_KEY='', DECOR_OX=0, DECOR_OY=0, DECOR_W=0, DECOR_H=0;
-const DECOR_SCALE=1.5;
-function renderDecorCache(){
-  const key = W+"|"+H+"|"+nodes.length+"|"+(curTpl||'')+"|"+curBiome;
-  if(key===DECOR_KEY && DECOR_CV) return;
+function drawProps(){
   makeProps();
-  const m=80;
-  const x0=MAPBB?MAPBB.x0-m:0, y0=MAPBB?MAPBB.y0-m:0;
-  const w=MAPBB?(MAPBB.x1-MAPBB.x0)+2*m:W, h=MAPBB?(MAPBB.y1-MAPBB.y0)+2*m:H;
-  if(!DECOR_CV) DECOR_CV=document.createElement('canvas');
-  DECOR_CV.width=Math.max(1,Math.round(w*DECOR_SCALE));
-  DECOR_CV.height=Math.max(1,Math.round(h*DECOR_SCALE));
-  const g=DECOR_CV.getContext('2d');
-  g.setTransform(DECOR_SCALE,0,0,DECOR_SCALE,-x0*DECOR_SCALE,-y0*DECOR_SCALE);
-  g.lineJoin='round'; g.lineCap='round';
-  drawProps(g);
-  DECOR_OX=x0; DECOR_OY=y0; DECOR_W=w; DECOR_H=h;
-  DECOR_KEY=key;
-}
-function drawProps(ctx){
-  const P=biome().pal;
   ctx.save();
   for(const p of PROPS){
-    if(p.kind==='rock'){                              // 岩石：五边小块，淡淡浮起
+    if(p.kind===0){                                   // 岩石：五边小块，淡淡浮起
       ctx.beginPath();
       for(let k=0;k<5;k++){
         const ang=p.a+k*1.2566, rr2=p.r*(0.72+0.28*((k*37)%5)/5);
@@ -6188,97 +5601,39 @@ function drawProps(ctx){
         if(k) ctx.lineTo(x,y); else ctx.moveTo(x,y);
       }
       ctx.closePath();
-      ctx.fillStyle=P.rockFill; ctx.fill();
-      ctx.lineWidth=0.8; ctx.strokeStyle=P.rockEdge; ctx.stroke();
-    } else if(p.kind==='deadwood'){                   // 枯木：一根主干 + 两根斜枝
-      ctx.strokeStyle=P.wood;
-      ctx.lineWidth=1.2*p.w;
+      ctx.fillStyle="rgba(255,255,255,0.055)"; ctx.fill();
+      ctx.lineWidth=0.8; ctx.strokeStyle="rgba(0,0,0,0.32)"; ctx.stroke();
+    } else if(p.kind===1){                            // 枯木：一根主干 + 两根斜枝
+      ctx.strokeStyle="rgba(0,0,0,0.40)";
+      ctx.lineWidth=1.2*p.w; ctx.lineCap="round";
       ctx.beginPath();
       ctx.moveTo(p.x, p.y+p.r*0.85); ctx.lineTo(p.x, p.y-p.r*0.45);
       ctx.moveTo(p.x, p.y-p.r*0.05); ctx.lineTo(p.x-p.r*0.48, p.y-p.r*0.55);
       ctx.moveTo(p.x, p.y-p.r*0.05); ctx.lineTo(p.x+p.r*0.42, p.y-p.r*0.65);
       ctx.stroke();
-    } else if(p.kind==='grass'){                      // 草丛：三五根短弧线
-      ctx.strokeStyle=P.grass;
-      ctx.lineWidth=1;
+    } else if(p.kind===2){                            // 草丛：三五根短弧线
+      ctx.strokeStyle="rgba(140,190,150,0.30)";
+      ctx.lineWidth=1; ctx.lineCap="round";
       ctx.beginPath();
       for(let k=-1;k<=1;k++){
         ctx.moveTo(p.x+k*p.r*0.28, p.y+p.r*0.5);
         ctx.quadraticCurveTo(p.x+k*p.r*0.42, p.y, p.x+k*p.r*0.55*p.s, p.y-p.r*(0.5+p.s*0.3));
       }
       ctx.stroke();
-    } else if(p.kind==='tree'){                       // 圆头树/橡树：深冠 + 短干
+    } else {                                          // 圆头树：深冠 + 短干
       const cr=p.r*(0.62+p.s*0.22);
-      ctx.strokeStyle=P.trunk;
-      ctx.lineWidth=1.4;
+      ctx.strokeStyle="rgba(0,0,0,0.42)";
+      ctx.lineWidth=1.4; ctx.lineCap="round";
       ctx.beginPath();
       ctx.moveTo(p.x, p.y+cr*0.9); ctx.lineTo(p.x, p.y);
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(p.x, p.y-cr*0.35, cr, 0, Math.PI*2);
-      ctx.fillStyle=P.crown; ctx.fill();
-      ctx.lineWidth=0.8; ctx.strokeStyle=P.rockEdge; ctx.stroke();
+      ctx.fillStyle="rgba(58,92,66,0.55)"; ctx.fill();
+      ctx.lineWidth=0.8; ctx.strokeStyle="rgba(0,0,0,0.35)"; ctx.stroke();
       ctx.beginPath();
       ctx.arc(p.x-cr*0.3, p.y-cr*0.62, cr*0.4, 0, Math.PI*2);
-      ctx.fillStyle=P.crownHi; ctx.fill();
-    } else if(p.kind==='wheat'){                      // 麦田块：金黄小束 + 穗点
-      ctx.strokeStyle=P.wheatEdge; ctx.lineWidth=1.1;
-      ctx.beginPath();
-      for(let k=-1;k<=1;k++){
-        ctx.moveTo(p.x+k*p.r*0.3, p.y+p.r*0.45);
-        ctx.lineTo(p.x+k*p.r*0.3*p.s, p.y-p.r*0.4);
-      }
-      ctx.stroke();
-      ctx.fillStyle=P.wheat;
-      for(let k=-1;k<=1;k++){
-        ctx.beginPath(); ctx.arc(p.x+k*p.r*0.3*p.s, p.y-p.r*0.45, 1.4*p.w, 0, Math.PI*2); ctx.fill();
-      }
-    } else if(p.kind==='bones'){                      // 白骨堆：两根交叉骨
-      ctx.strokeStyle=P.bones; ctx.lineWidth=1.3*p.w;
-      ctx.beginPath();
-      ctx.moveTo(p.x-p.r*0.5, p.y-p.r*0.3); ctx.lineTo(p.x+p.r*0.5, p.y+p.r*0.3);
-      ctx.moveTo(p.x-p.r*0.5, p.y+p.r*0.3); ctx.lineTo(p.x+p.r*0.5, p.y-p.r*0.3);
-      ctx.stroke();
-    } else if(p.kind==='cactus'){                     // 仙人掌：主茎 + 两臂
-      ctx.strokeStyle=P.cactus; ctx.lineWidth=1.8*p.w;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y+p.r*0.6); ctx.lineTo(p.x, p.y-p.r*0.55);
-      ctx.moveTo(p.x, p.y-p.r*0.05); ctx.lineTo(p.x+p.r*0.4, p.y-p.r*0.05); ctx.lineTo(p.x+p.r*0.4, p.y-p.r*0.4);
-      ctx.moveTo(p.x, p.y+p.r*0.12); ctx.lineTo(p.x-p.r*0.36, p.y+p.r*0.12); ctx.lineTo(p.x-p.r*0.36, p.y-p.r*0.16);
-      ctx.stroke();
-    } else if(p.kind==='crystal'){                    // 晶簇（烬晶/冰晶）：主晶 + 侧晶
-      ctx.fillStyle=P.crystal;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y-p.r*0.8); ctx.lineTo(p.x+p.r*0.28, p.y); ctx.lineTo(p.x-p.r*0.28, p.y);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle=P.crystalDark;
-      ctx.beginPath();
-      ctx.moveTo(p.x+p.r*0.42, p.y-p.r*0.42); ctx.lineTo(p.x+p.r*0.62, p.y+p.r*0.1); ctx.lineTo(p.x+p.r*0.16, p.y+p.r*0.1);
-      ctx.closePath(); ctx.fill();
-    } else if(p.kind==='ribs'){                       // 龙骸骨：三根肋拱 + 脊线
-      ctx.strokeStyle=P.bones; ctx.lineWidth=1.2*p.w;
-      ctx.beginPath();
-      for(let k=-1;k<=1;k++){
-        ctx.moveTo(p.x+k*p.r*0.42, p.y+p.r*0.35);
-        ctx.quadraticCurveTo(p.x+k*p.r*0.42, p.y-p.r*0.5, p.x+k*p.r*0.42+p.r*0.16, p.y-p.r*0.56);
-      }
-      ctx.moveTo(p.x-p.r*0.68, p.y+p.r*0.35); ctx.lineTo(p.x+p.r*0.68, p.y+p.r*0.35);
-      ctx.stroke();
-    } else if(p.kind==='pine'){                       // 雪松：三角冠 + 雪线
-      const cr=p.r*(0.7+p.s*0.2);
-      ctx.fillStyle=P.pine;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y-cr); ctx.lineTo(p.x+cr*0.62, p.y+cr*0.5); ctx.lineTo(p.x-cr*0.62, p.y+cr*0.5);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle=P.snow;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y-cr); ctx.lineTo(p.x+cr*0.3, p.y-cr*0.34); ctx.lineTo(p.x-cr*0.3, p.y-cr*0.34);
-      ctx.closePath(); ctx.fill();
-    } else if(p.kind==='snowtuft'){                   // 雪窝：浅色浅坑
-      ctx.fillStyle=P.grass;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, p.r*0.7, p.r*0.4, p.a, 0, Math.PI*2);
-      ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,0.07)"; ctx.fill();
     }
   }
   ctx.restore();
@@ -8220,10 +7575,7 @@ function loop(ts){
     // hit-stop：玩家关键占领后短暂慢动作（0.35×），其余时间全速
     let dt = rawDt;
     if(hitStopT > 0){ hitStopT -= rawDt; dt *= 0.35; }
-    if(timeScaleUntil > 0){ timeScaleUntil -= rawDt; if(timeScaleUntil <= 0){ timeScaleUntil=0; timeScale=1; } }
-    if(timeScale !== 1) dt *= timeScale;               // 局中演出：子弹时间
     camStep(rawDt);                          // 镜头推进不受暂停限制（导演聚焦/终局演出都要在暂停时推镜）
-    midStep(rawDt);                          // 局中演出序列：真实时间推进（暂停时运镜/对白照常走）
     if(!paused){
       dt *= finaleScale();                   // 终局慢动作：占领特效在慢镜头里播完
       update(dt);
@@ -8363,55 +7715,29 @@ function nodeAtNear(x,y,rad){
 }
 function getPos(e){ const r=cv.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
 
-// —— 批次A 地图手势：平移 / 捏合缩放 / 双击复位 ——
-// 手势分工（一指派兵红线不破）：
-//   · 按住己方格拖动 = 派兵（原逻辑，多指并行照旧）；
-//   · 按住空白海面 / 敌方 / 中立格拖动 = 平移视角；两指都落在非己方格 = 捏合缩放；
-//   · 右键拖 / 滚轮 = 桌面平移 / 缩放；空白处双击（或双轻点）= 复位全景。
-// 仲裁：派兵优先——拖动己方格的手势永远成立；有派兵拖拽进行中时不再启动平移。
-const panPts=new Map();   // pointerId → {sx,sy,x,y,lx,ly,lt,moved}（平移/捏合手势）
-let pinch=null;           // {d0, zoom0, cam0, mid0} 双指捏合基准
-let lastTapAt=0;          // 空白处双轻点检测
-
 cv.addEventListener("pointerdown", e=>{
-  if(midSkip()) return;          // 局中演出的剧情节拍暂停：点一下跳过（这次点击被吃掉，不会误派兵）
   if(!running || paused) return;
   Sfx.init(); // 用户手势：初始化音频
   if(skillAiming) return; // 技能瞄准态：按下不拖兵，抬起结算
-  const p=getPos(e);
-  const wp=scr2world(p);
-  const n=nodeAtNear(wp.x,wp.y,12/cam.zoom);
-  // 派兵优先：点在己方格上 = 派兵拖拽（原逻辑不变；若正有平移手势则取消之）
-  if(n && n.owner===1 && e.button!==2){
-    panPts.clear(); pinch=null;
-    // 拆塔长按（第二批 · 天龙 L3）：按住己方箭塔 → 记进度，tickDemolish 达阈值自动拆。
-    // 出兵拖拽与拆塔互斥：非拆塔关/非己方塔照旧走派兵。
-    if(n.type==='tower' && lvCtx && lvCtx.mods.demolish){
-      demProgP = { node:n, at:performance.now() };
-    }
-    drags.set(e.pointerId, { from:n, pos:wp, to:null, t0:performance.now(), startPos:p, half:false, dragOut:false });
+  const p=getPos(e); const n=nodeAtNear(p.x,p.y,12);
+  // 拆塔长按（第二批 · 天龙 L3）：按住己方箭塔 → 记进度，tickDemolish 达阈值自动拆。
+  // 出兵拖拽与拆塔互斥：非拆塔关/非己方塔照旧走派兵。
+  if(n && n.owner===1 && n.type==='tower' && lvCtx && lvCtx.mods.demolish){
+    demProgP = { node:n, at:performance.now() };
+  }
+  if(n && n.owner===1){
+    drags.set(e.pointerId, { from:n, pos:p, to:null, t0:performance.now(), startPos:p, half:false, dragOut:false });
     if(tut && tut.step===0){ tut.step=1; tutShow('很好！现在拖到附近的灰色中立地块上'); }
     guideEvent('touch');
-    return;
-  }
-  // 平移/捏合：右键（桌面）或 空白/敌方/中立格。
-  // 有派兵拖拽进行中 → 忽略（不抢派兵的手指）；已有两指在平移 → 忽略第三指。
-  if(drags.size>0 || panPts.size>=2) return;
-  panPts.set(e.pointerId,{ sx:p.x, sy:p.y, x:p.x, y:p.y, lx:p.x, ly:p.y, lt:performance.now(), moved:false });
-  if(panPts.size===2){
-    const ab=[...panPts.values()];
-    pinch={ d0:Math.hypot(ab[0].x-ab[1].x, ab[0].y-ab[1].y)||1, zoom0:cam.zoom,
-            cam0:{x:cam.x,y:cam.y}, mid0:{x:(ab[0].x+ab[1].x)/2, y:(ab[0].y+ab[1].y)/2} };
   }
 });
 cv.addEventListener("pointermove", e=>{
   const p=getPos(e);
-  if(skillAiming){ aimPos=scr2world(p); return; }
+  if(skillAiming){ aimPos=p; return; }
   const d = drags.get(e.pointerId);
   if(d){
-    const wp=scr2world(p);
-    d.pos=wp; d.to=nodeAtNear(wp.x,wp.y,12/cam.zoom);
-    const md = Math.hypot(p.x-d.startPos.x, p.y-d.startPos.y);   // 手势位移按屏幕像素算（不随缩放飘）
+    d.pos=p; d.to=nodeAtNear(d.pos.x,d.pos.y,12);
+    const md = Math.hypot(p.x-d.startPos.x, p.y-d.startPos.y);
     // 按住箭塔期间拖动 = 改派塔里的兵 → 取消拆塔进度（只有原地按住不放才拆；10px 与全局点按容差一致）
     if(demProgP && demProgP.node===d.from && md > 10) demProgP = null;
     // 拖出小范围 → 已决定"全军拖出"，锁定不再转半军（即使之后停很久）
@@ -8426,52 +7752,14 @@ cv.addEventListener("pointermove", e=>{
     }
     return;
   }
-  // 平移 / 捏合缩放
-  const pp=panPts.get(e.pointerId);
-  if(pp){
-    pp.x=p.x; pp.y=p.y;
-    if(pinch && panPts.size===2){
-      const ab=[...panPts.values()];
-      const mid={x:(ab[0].x+ab[1].x)/2, y:(ab[0].y+ab[1].y)/2};
-      const dcur=Math.hypot(ab[0].x-ab[1].x, ab[0].y-ab[1].y)||1;
-      // 初始中点下的世界点为锚：双指跟着手走、间距决定缩放，一体完成
-      const z1=Math.max(CFG.camMinZoom, Math.min(CFG.camMaxZoom, pinch.zoom0*dcur/pinch.d0));
-      const wMid={ x:(pinch.mid0.x-W/2)/pinch.zoom0+pinch.cam0.x, y:(pinch.mid0.y-H/2)/pinch.zoom0+pinch.cam0.y };
-      cam.zoom=z1;
-      cam.x=wMid.x-(mid.x-W/2)/z1; cam.y=wMid.y-(mid.y-H/2)/z1;
-      camUser=true; clampCam();
-      pp.moved=true; camVel={x:0,y:0};
-    } else {
-      if(!pp.moved && Math.hypot(p.x-pp.sx, p.y-pp.sy)>6) pp.moved=true;
-      if(pp.moved){
-        const dx=p.x-pp.lx, dy=p.y-pp.ly;
-        camPanBy(dx,dy);
-        // 惯性速度（平滑采样）：松手后按此速度滑行一小段
-        const now=performance.now(), dt=Math.max(1,now-pp.lt)/1000;
-        camVel.x = (-dx/cam.zoom/dt)*0.6 + camVel.x*0.4;
-        camVel.y = (-dy/cam.zoom/dt)*0.6 + camVel.y*0.4;
-      }
-      pp.lx=p.x; pp.ly=p.y; pp.lt=performance.now();
-    }
-    return;
-  }
   // 非拖拽时：追踪悬停节点，落在自己节点上显示手型光标
-  const hw=scr2world(p);
-  hoverNode = (running && !paused) ? nodeAt(hw.x,hw.y) : null;
+  hoverNode = (running && !paused) ? nodeAt(p.x,p.y) : null;
   cv.style.cursor = (hoverNode && hoverNode.owner===1) ? "pointer" : "default";
 });
-// 桌面缩放：滚轮以光标为锚；双击空白复位全景
-cv.addEventListener("wheel", e=>{
-  if(!running || paused) return;
-  e.preventDefault();
-  const p=getPos(e);
-  camZoomAt(p.x, p.y, e.deltaY<0 ? 1.12 : 1/1.12);
-}, {passive:false});
-cv.addEventListener("dblclick", e=>{ if(running && !paused) camReset(); });
 function resolveAim(e){
-  const p=getPos(e); aimPos=scr2world(p);
+  const p=getPos(e); aimPos=p;
   const sk=SKILLS[curSkill]; if(!sk){ skillAiming=false; skillBtn.classList.remove('aiming'); return; }
-  const n=nodeAtNear(aimPos.x,aimPos.y,18/cam.zoom);
+  const n=nodeAtNear(p.x,p.y,18);
   if(sk.tgt==='ally'){
     if(n && n.owner===1) doCast(curSkill,{node:n});
     else showToast('⚠','无效目标','请点击己方（绿色）据点',1.2);
@@ -8479,7 +7767,7 @@ function resolveAim(e){
     if(n && n.owner!==1) doCast(curSkill,{node:n});
     else showToast('⚠','无效目标','请点击敌方据点',1.2);
   } else { // point
-    doCast(curSkill,{x:aimPos.x,y:aimPos.y});
+    doCast(curSkill,{x:p.x,y:p.y});
   }
 }
 function endDrag(e){
@@ -8487,9 +7775,9 @@ function endDrag(e){
   if(!d) return;
   drags.delete(e.pointerId);
   demProgP = null;               // 手指抬起：拆塔长按必然中断（无论是否执行过）
-  const p=getPos(e); const wp=scr2world(p);
+  const p=getPos(e);
   // 防误触（V11）：位移 < 10px 视为"点了一下"——落在刚出兵的村上=召回该队，其余忽略
-  if(dist(d.from, wp) < 10/cam.zoom){
+  if(dist(d.from, p) < 10){
     const sq=d.from.lastSquad;               // 失败反馈（v5.1）：召回不再是静默失败，玩家能知道为什么没反应
     if(sq && !tryRecall(d.from)){
       floatText(d.from.x, d.from.y-d.from.rad-14,
@@ -8497,7 +7785,7 @@ function endDrag(e){
     }
     return;
   }
-  const t=nodeAtNear(wp.x,wp.y,12/cam.zoom);
+  const t=nodeAtNear(p.x,p.y,12);
   if(t){
     dragSend(d, t);
     if(tut && tut.step===1){ tut.step=2; tutShow('兵球正在进发，到达后自动占领！'); }
@@ -8509,24 +7797,8 @@ function dragSend(d, t){
   send(d.from, t, undefined, useHalf);
   guideEvent('send', { half:useHalf });
 }
-cv.addEventListener("pointerup", e=>{
-  if(skillAiming){ resolveAim(e); return; }
-  // 平移/捏合手势收尾：松一指退捏合；未移动的双轻点 = 复位全景；松手超 120ms 无移动则不甩惯性
-  const pp=panPts.get(e.pointerId);
-  if(pp){
-    panPts.delete(e.pointerId);
-    if(panPts.size<2) pinch=null;
-    if(performance.now()-pp.lt>120) camVel={x:0,y:0};
-    if(!pp.moved){
-      const now=performance.now();
-      if(now-lastTapAt<320){ camReset(); lastTapAt=0; }
-      else lastTapAt=now;
-    }
-    return;
-  }
-  endDrag(e);
-});
-cv.addEventListener("pointercancel", e=>{ drags.delete(e.pointerId); panPts.delete(e.pointerId); if(panPts.size<2) pinch=null; demProgP=null; skillAiming=false; if(typeof skillBtn!=='undefined') skillBtn.classList.remove('aiming'); });
+cv.addEventListener("pointerup", e=>{ if(skillAiming){ resolveAim(e); } else { endDrag(e); } });
+cv.addEventListener("pointercancel", e=>{ drags.delete(e.pointerId); demProgP=null; skillAiming=false; if(typeof skillBtn!=='undefined') skillBtn.classList.remove('aiming'); });
 // 长按不弹系统菜单 / 不触发文本选择（移动端细节）
 // 拆塔动作（第二批 · 天龙 L3 徒手折辱）：占领敌方/中立箭塔后，长按 1.5s 把塔夷为平地（降级为普通村庄）。
 // 仅 demolish 修饰词关生效；按住时画布上画崩裂进度弧（draw 段 demProgP）。
@@ -8676,7 +7948,7 @@ skillBtn.addEventListener("click", ()=>{
   else {
     skillAiming=!skillAiming;
     skillBtn.classList.toggle('aiming', skillAiming);
-    aimPos={x:cam.x, y:cam.y};
+    aimPos={x:W/2, y:H/2};
     Sfx.play('ui');
   }
 });
@@ -8795,15 +8067,15 @@ const GUIDES = {
     {txt:'放一次看看：点左下角 ✦ 钮；要瞄准就再点个目标。趁乱麻利收下粮仓！', wait:'skill'},
     {txt:'技能留着关键团战——麦子入仓，这季的仗就好打了'},
   ],
-  // L5 湖畔粮道（批次C · S2 碎群岛）：运粮航线——剧情锚点：碎群岛、沿线麦仓、粮道命脉
+  // L5 雾中渗透：兵营克制（弓箭手）——剧情锚点：浓雾封岛、远程被削三成
   l5:[
-    {txt:'粮道就是生命线——金圈里是航线沿线的麦仓。先占下它，粮船才敢走这条水路', focus:'type:barn', label:'沿线麦仓', wait:'capture', chk:d=>d.node.type==='barn'},
-    {txt:'麦仓存粮足、产兵快；可粮仓储量会随时间腐烂——手快者得食，下一座，快！'},
+    {txt:'浓雾封岛，弓手法师的眼睛都瞎了三成——但金圈的弓箭手兵营还在。占下它，至少我们手里攥着远程', focus:'type:archery', label:'弓箭手兵营', wait:'capture', chk:d=>d.node.type==='archery'},
+    {txt:'弓手会停在半路放冷箭，专克行军的大队；就是血薄，别让它们落单送死'},
   ],
-  // L6 谷仓重镇（批次C · 粮道机制）：前线城堡——剧情锚点：占城堡掌粮道、农舍产兵 +50%
+  // L6 两线告急：法师营解锁介绍——剧情锚点：腹背受敌、南北对进
   l6:[
-    {txt:'看到金圈的前线城堡了吗——那是整条粮道的开关。集中兵力，先把它拿下来', focus:'fcastle', label:'前线城堡 · 新！', wait:'capture', chk:d=>d.node.type==='fcastle'},
-    {txt:'粮道贯通！只要城堡在我们手里，所有农舍产兵提速五成——守住它，补贴就是战力'},
+    {txt:'北面龙军、南面哥布林，我们从中间被夹住了！金圈是法师兵营——占下它，溅射弹雨能同时招呼两路敌兵', focus:'type:mage', label:'法师营 · 新！', wait:'capture', chk:d=>d.node.type==='mage'},
+    {txt:'法师弹带溅射，砸进敌群才划算；就是脆皮一个，占下后记得用半军护着点'},
   ],
   // L7 光复村镇：重械营解锁介绍——剧情锚点：沦陷村镇重兵、一寸山河一寸血
   l7:[
@@ -8822,10 +8094,6 @@ function guideFocus(f){
   if(typeof f==='string' && f.startsWith('type:')){
     const t=f.slice(5);
     const n=nodes.find(x=>x.type===t && x.owner===0) || nodes.find(x=>x.type===t);
-    return n?[n]:[];
-  }
-  if(f==='fcastle'){   // 前线城堡（粮道引导）：优先指还中立的
-    const n=nodes.find(x=>x.type==='fcastle' && x.owner===0) || nodes.find(x=>x.type==='fcastle');
     return n?[n]:[];
   }
   return [];
@@ -8892,12 +8160,11 @@ function stageBattle(){
   document.getElementById("a1Name").textContent = CFG.races[factionOf[2]].name + (_sameCamp?' ⚑':'');
   document.getElementById("a2Name").textContent = (_sameCamp?'⚑ ':'') + CFG.races[factionOf[3]].name;
   document.getElementById("diffChip").textContent = effDiff();
-  curBiome = resolveBiome(lvDef);   // 批次B：战役按族换生态皮肤；关卡可用 lvDef.biome 覆盖（批次C）
   const _hudEl=document.getElementById("hud");
   _hudEl.style.setProperty("--fc1", colOf(1));
   _hudEl.style.setProperty("--fc2", colOf(2));
   _hudEl.style.setProperty("--fc3", colOf(3));
-  buildMap(lvDef ? (lvDef.tpl || SKEL[lvDef.skel].tpl) : pickTemplate(), lvDef ? lvCtx.mods : null);
+  buildMap(lvDef ? SKEL[lvDef.skel].tpl : pickTemplate(), lvDef ? SKEL[lvDef.skel].mods : null);
   document.getElementById("tplChip").textContent =
     lvDef ? ('第'+lvId+'关 · '+lvDef.name)
     : '自由对战';
@@ -8916,12 +8183,10 @@ function stageBattle(){
   lootGoalN = (lvCtx && lvCtx.mods.lootGoal) ? lvCtx.mods.lootGoal : 0;
   lootWinFired = false;
   dirBuildQueue(lvDef);
-  midBuildQueue(lvDef);   // ㉑ 局中触发演出队列（首秀关卡在 CAMPAIGNS 里配 midCine）
-  _outroDone=false;       // ㉒ 胜利尾声对白幕：每局只允许播一次
   if(lvCtx && lvCtx.mods.eventFast) evNextAt = 45;   // 蝗灾之季提前开饭
   // 打击感/战报时间轴/成就追踪：每局重置
   hitStopT=0; capStreak=0; capStreakLast=-99;
-  cam={...camHome}; camUser=false; camVel={x:0,y:0}; finale=null; _lastCapNode=null; bannerSlow=false;   // 镜头与终局演出状态归位（相机回全景归位点）
+  cam={x:W/2, y:H/2, zoom:1}; finale=null; _lastCapNode=null; bannerSlow=false;   // 镜头与终局演出状态归位
   tlSamples=[]; tlLast=-1;
   battleMinRatio=1; battleCamps=new Set();
   { const tc=totalCap()||1; tlSamples.push({t:0,p:ownerCap(1)/tc,r:ownerCap(2)/tc,y:ownerCap(3)/tc}); }
@@ -9018,50 +8283,14 @@ function finaleScale(){            // 表现速度：前 0.6s 由全速平滑降
   const k = Math.min(1, finale.t/0.6);
   return 1 - 0.78*k*k;
 }
-// ===================== 批次A 常驻相机：平移 / 缩放 / 复位 =====================
-// 屏幕坐标 ↔ 世界坐标（渲染层同一套变换：translate(W/2,H/2) → scale(zoom) → translate(-cam)）
-function scr2world(p){ return { x:(p.x-W/2)/cam.zoom+cam.x, y:(p.y-H/2)/cam.zoom+cam.y }; }
-function world2scr(p){ return { x:(p.x-cam.x)*cam.zoom+W/2, y:(p.y-cam.y)*cam.zoom+H/2 }; }
-// 平移边界：视野最多拖到「地图包围盒外扩 70px 世界单位」为止，防止把地图拖丢
-function clampCam(){
-  if(!MAPBB) return;
-  const m=70, vw=W/cam.zoom, vh=H/cam.zoom;
-  const bw=(MAPBB.x1-MAPBB.x0)+2*m, bh=(MAPBB.y1-MAPBB.y0)+2*m;
-  if(vw>=bw) cam.x=(MAPBB.x0+MAPBB.x1)/2;
-  else cam.x=Math.max(MAPBB.x0-m+vw/2, Math.min(MAPBB.x1+m-vw/2, cam.x));
-  if(vh>=bh) cam.y=(MAPBB.y0+MAPBB.y1)/2;
-  else cam.y=Math.max(MAPBB.y0-m+vh/2, Math.min(MAPBB.y1+m-vh/2, cam.y));
-}
-function camPanBy(dx,dy){           // dx/dy 屏幕像素（手指位移 → 反向移动世界）
-  cam.x-=dx/cam.zoom; cam.y-=dy/cam.zoom;
-  camUser=true; clampCam();
-}
-function camZoomAt(sx,sy,factor){   // 以屏幕点 (sx,sy) 为锚缩放：锚点下的世界点不动
-  const z0=cam.zoom;
-  const z1=Math.max(CFG.camMinZoom, Math.min(CFG.camMaxZoom, z0*factor));
-  if(Math.abs(z1-z0)<1e-6) return;
-  const w=scr2world({x:sx,y:sy});
-  cam.zoom=z1;
-  cam.x=w.x-(sx-W/2)/z1; cam.y=w.y-(sy-H/2)/z1;
-  camUser=true; clampCam();
-}
-function camReset(){ camUser=false; camVel={x:0,y:0}; }   // 双击复位：camStep 自动缓移回 camHome
-
 function camStep(rdt){             // 镜头推进用真实时间，不受慢动作拖慢
-  // 默认目标：玩家动过相机就保持玩家视角，否则回全景归位点
-  let tz=camUser?cam.zoom:camHome.zoom, tx=camUser?cam.x:camHome.x, ty=camUser?cam.y:camHome.y;
+  let tz=1, tx=W/2, ty=H/2;
   if(finale && finale.node){ tz=1.85; tx=finale.node.x; ty=finale.node.y; }
   if(cine){ tz=cine.zoom; tx=cine.x; ty=cine.y; }   // 导演聚焦：暂停期间也推镜（loop 中不受暂停限制）
   cam.zoom += (tz-cam.zoom)*Math.min(1, rdt*1.6);
   const k = Math.min(1, rdt*2.2);
   cam.x += (tx-cam.x)*k;
   cam.y += (ty-cam.y)*k;
-  // 惯性甩动：玩家视角下无演出时按速度滑行并快速衰减
-  if(camUser && !finale && !cine && (Math.abs(camVel.x)>1 || Math.abs(camVel.y)>1)){
-    cam.x += camVel.x*rdt; cam.y += camVel.y*rdt;
-    const d=Math.pow(0.06, rdt); camVel.x*=d; camVel.y*=d;
-    clampCam();
-  }
 }
 function tickFinale(rawDt){        // 演出计时（真实时间约 3.2s）；播完 → 缓缓弹出结算
   if(!finale) return;
@@ -9073,46 +8302,7 @@ function tickFinale(rawDt){        // 演出计时（真实时间约 3.2s）；�
   }
 }
 
-// —— 结算分叉：败局反转（㉓）→ 胜利尾声幕（㉒）→ 结算横幅 ——
-// endGame 只做「该不该直接弹横幅」的判定，真正的横幅渲染在 endGameShow。
 function endGame(owner, playerLost){
-  running=false;
-  if(playerLost && owner!==1 && midTryRevive()) return;   // 反转成功 → 战斗继续，不结算
-  if(owner===1 && midTryOutro()) return;                  // 尾声对白播完会回调回这里（_outroDone 已置位）
-  endGameShow(owner, playerLost);
-}
-// ㉒ 胜利尾声对白幕：把单句 win 扩成 2~4 句小幕（win 仍保留在结算横幅的剧情行）
-function midTryOutro(){
-  if(_outroDone || lastMode!=='camp' || !campStage) return false;
-  const lvDef=campLv(campRace, campStage);
-  if(!lvDef || !Array.isArray(lvDef.outro) || !lvDef.outro.length) return false;
-  _outroDone=true;
-  bannerSlow=true;                       // 尾声幕播完 → 横幅缓缓淡入
-  startDialogueScene(lvDef.outro, true, ()=>endGame(1,false));
-  return true;
-}
-// ㉓ 败局反转接续战：每关只给一次——反转演出 + 一次性救场资源，再败才真输
-function midTryRevive(){
-  if(reviveUsed || lastMode!=='camp' || !campStage) return false;
-  const lvDef=campLv(campRace, campStage);
-  if(!lvDef || !lvDef.revive) return false;
-  reviveUsed=true; pyrrhic=true;
-  const rv=lvDef.revive;
-  const seq=[];
-  if(rv.slowmo) seq.push({ slowmo:rv.slowmo });
-  seq.push({ sfx:'hit' });
-  seq.push({ vfx:rv.vfx||'shock', at:rv.at||'base', dur:0.9 });
-  if(rv.lines) seq.push({ dlg:rv.lines });
-  seq.push({ fn:'__revive' });           // 救场：授予二道防线据点 + 预备队（可重设坚守目标）
-  if(rv.toast) seq.push({ toast:rv.toast });
-  if(rv.buff) seq.push({ buff:rv.buff });
-  // 演出期间战斗冻结（paused），播完由 midEnd 的 midResume 把战斗还回去
-  running=true; paused=true; midResume=true;
-  midStart(seq);
-  return true;
-}
-// 注：败局反转的救场动作注册在下方 midCine 区块的 MID_EDIT 表内（MID_EDIT 为 const，必须先声明后挂载）
-function endGameShow(owner, playerLost){
   running=false;
   fastWinShown=false; fastWinBtn.style.display="none";
   tutHide();
@@ -9132,7 +8322,7 @@ function endGameShow(owner, playerLost){
   rpEl.classList.remove('open');
   document.getElementById("rpToggle").textContent='▸ 详细战报';
   document.getElementById("rpBody").innerHTML='';
-  modeEl.textContent = campStage ? ('统一之路 · '+CAMP_META[campRace].title+' · 第 '+campStage+' 关'+(pyrrhic?' · ⚔ 险胜':''))
+  modeEl.textContent = campStage ? ('统一之路 · '+CAMP_META[campRace].title+' · 第 '+campStage+' 关')
     : '自由对战';
   modeEl.style.display='inline-block';
   rwEl.style.display='none'; storyEl.style.display='none'; nextEl.style.display='none';
@@ -9729,7 +8919,6 @@ function dlgNextLine(){
   el.dataset.full=text;
 }
 function dlgAdvance(){
-  if(!dlgLines) return;
   const el=document.getElementById('dlgText'), full=el.dataset.full||'';
   if(el.textContent!==full){ // 打字中：立即补全
     clearInterval(dlgTimer);
@@ -9756,9 +8945,8 @@ const DIR_OPEN_AT = 5;
 // —— 剧本队列构建（stageBattle 调用）——
 function dirBuildQueue(lvDef){
   dirQ = (lvDef && Array.isArray(lvDef.dir)) ? lvDef.dir.map(e=>({...e})) : [];
-  // 同盟关自动追加反水剧本（若关卡未手写：dir 里没有、midCine 里也没有 onBetray）
-  const hasMidCineBetray = (lvDef && Array.isArray(lvDef.midCine)) && lvDef.midCine.some(e=>e.on==='onBetray');
-  if(lvCtx && lvCtx.mods.ally && !hasMidCineBetray && !dirQ.some(e=>e.on==='betray')){
+  // 同盟关自动追加反水剧本（若关卡未手写）
+  if(lvCtx && lvCtx.mods.ally && !dirQ.some(e=>e.on==='betray')){
     const foeName=CFG.races[factionOf[2]].name, allyName=CFG.races[factionOf[3]].name;
     dirQ.push({ on:'betray', focus:{owner:3}, zoom:1.9, label:'背盟！',
       lines:[[1,'报——'+foeName+'主力已被击溃！可是……'+allyName+'阵前倒戈，正向我们开火！'],
@@ -9781,7 +8969,6 @@ function dirResolveFocus(f){
   else if(f==='bunker') list=[nodes.find(n=>n.bunker)||null];            // 桥头碉堡（v6）
   else if(f==='forge') list=[nodes.find(n=>n.forge)||null];              // 符文熔炉
   else if(f==='barns') list=nodes.filter(n=>n.type==='barn').slice(0,3); // 大麦仓群
-  else if(f==='fcastle') list=nodes.filter(n=>n.type==='fcastle').slice(0,2); // 前线城堡（粮道）
   else if(f==='stalls') list=nodes.filter(n=>n.type==='stall').slice(0,4); // 货栈群
   else if(f==='center') list=[nodes.filter(n=>n.owner===0&&n.type==='village').sort((a,b)=>b.cap-a.cap)[0]||null]; // 中央巨城/宝库门
   else if(f==='towers'){                                                 // 中央中立塔群（最多 3 座）
@@ -9840,208 +9027,6 @@ function checkBetrayal(){
     if(a2) a2.textContent=CFG.races[factionOf[3]].name+' ⚔';
     showToast('⚔','盟约破裂','「'+CFG.races[factionOf[3]].name+'」已向你宣战！',2.5);
   }
-}
-
-// ===================== 局中触发演出 midCine（GAME-UPDATE-PLAN 机制 ㉑） =====================
-// 关卡配置：midCine:[ { on:触发器, seq:[ 演出元素... ] } ]，每条只触发一次。
-//   触发器：
-//     {on:'onTime', t:22}                       计时到点
-//     {on:'onCap', type:'barn', n:1}            玩家持有的某类建筑达 n 个（n 默认 1）
-//     {on:'onCap', node:'hold'}                 指定目标节点归玩家（hold/king/boss/center/altar/forge/bunker）
-//     {on:'onCap', count:5}                     玩家持有建筑总数达 5
-//     {on:'onHpBelow', node:'hold', pct:50}     玩家持有的目标节点驻军跌破容量 pct%
-//     {on:'onGold', n:30}                       玩家战利品箱金币达 n
-//     {on:'onAlmostDefeat'}                     玩家濒危（据点 ≤1 且总占比 ≤15%）
-//     {on:'onAlmostWin', pct:80}                玩家碾压（占比 ≥ pct%，默认 80）
-//     {on:'onBetray'}                           盟友反水瞬间
-//   演出元素（seq 顺序执行，返回等待秒数；负数=等异步回调）：
-//     {slowmo:[0.25, 1.2]}                      子弹时间（倍率, 秒）
-//     {pause:1.2}                               剧情节拍暂停（≤2s，点击可跳过）
-//     {cam:'hold', zoom:2, label:'…', dur:1.6}  运镜聚焦 + 地图标注
-//     {vfx:'gold', at:'barns', dur:0.8}         特效（gold/fire/dust/ring/shock）
-//     {dlg:[[说话人,台词],…]}                    对白卡（点击推进，播完继续下一条）
-//     {spawn:{owner:1, n:8, at:'base'}}         增援：给目标格直接补驻军
-//     {buff:{atk:1.5, spd:1.3, dur:15}}         全军增益（默认给玩家方）
-//     {toast:['⚑','标题','描述',2.5]}            横幅提示
-//     {sfx:'conquer'}                           音效
-//     {fn:'mapEditId'}                          地图变更 / 机制开关（挂 MID_EDIT 表）
-// 原则：演出不锁操作（暂停 ≤2s 且可点掉），每关 ≤3 处，宁缺毋滥。
-const MID_VFX = { gold:'#ffd24a', fire:'#ff5a3c', dust:'#c8a06a', ring:'#9ad8ff', shock:'#ffe9a8' };
-// 地图变更 / 机制开关注册表：关卡的 {fn:'xxx'} 落到这里的同名函数（未实现的键静默跳过，不炸演出）
-const MID_EDIT = {};
-// 救场落地（㉓ 败局反转）：把「离前线最远的一座村」还给玩家当二道防线，补满预备队；
-// 若关卡配了 revive.holdTime，则把坚守计时重新上弦（目标改为夺回目标点并再守住一次）。
-MID_EDIT.__revive = function(step){
-  const lvDef = (lastMode==='camp' && campStage) ? campLv(campRace, campStage) : null;
-  const rv = (lvDef && lvDef.revive) || {};
-  const pop = rv.pop || 12;
-  const foeBases = nodes.filter(n=>n.owner===2 || n.owner===3);
-  const far = n => foeBases.length ? Math.min(...foeBases.map(f=>dist(n,f))) : 1e9;
-  // 候选：非玩家据点的普通村（不要王帐/要塞/Boss），挑离敌方最远的那座 = "二道防线"
-  let cand = nodes.filter(n=>n.owner!==1 && n.type==='village' && !n.kingsTent && !n.boss)
-                  .sort((a,b)=>far(b)-far(a))[0];
-  if(!cand) cand = nodes.filter(n=>n.owner!==1 && !n.kingsTent && !n.boss).sort((a,b)=>far(b)-far(a))[0];
-  if(!cand) return;
-  cand.owner=1; cand.pop=Math.min(cand.cap, pop); cand.flash=0.6; cand.conquer=0;
-  fx.push({ kind:'ring', x:cand.x, y:cand.y, life:.9, max:.9, r0:cand.rad, r1:cand.rad*3.6, color:colOf(1), vx:0, vy:0 });
-  spawnBurst(cand.x, cand.y, '#ffd24a');
-  floatText(cand.x, cand.y-cand.rad-16, '预备队抵达！', '#ffd24a');
-  // 重新上弦：坚守战把计时重置（目标仍是那座塔——得先夺回来）
-  if(rv.holdTime){
-    const hn = nodes.find(n=>n.holdMark);
-    if(hn) holdState = { node:hn, need:rv.holdTime, t:rv.holdTime };
-  }
-  // 玩家重新有据点后，全歼判定自然解除；副官存活跟踪复位，避免捷报逻辑错乱
-  aideAlive={2:true,3:true};
-  rebuildGrid();
-};
-// —— 队列构建（stageBattle 调用） ——
-function midBuildQueue(lvDef){
-  midQ = (lvDef && Array.isArray(lvDef.midCine)) ? lvDef.midCine.map(e=>({...e})) : [];
-  midSeq=null; midIdx=0; midWait=0; midHold=false; midBusy=false; midPausedByCine=false; midResume=false;
-  timeScale=1; timeScaleUntil=0; midBuffState={ atk:1, spd:1, until:0, owner:1 };
-}
-// —— 焦点解析：复用导演的 dirResolveFocus（'hold'/'boss'/'king'/'base'/'center'/'altar'/'forge'/'bunker'/'barns'/'fcastle'/'stalls'/'towers'/{owner:N}） ——
-function midNode(f){ return dirResolveFocus(f)[0] || null; }
-// —— 触发器判定 ——
-function midCondMet(e){
-  switch(e.on){
-    case 'onTime':  return gameTime >= (e.t||0);
-    case 'onCap': {
-      if(e.node){ const n=midNode(e.node); return !!(n && n.owner===1); }
-      if(e.type){
-        const need = e.n || 1;
-        return nodes.filter(n=>n.owner===1 && n.type===e.type).length >= need;
-      }
-      if(e.count) return nodes.filter(n=>n.owner===1).length >= e.count;
-      return false;
-    }
-    case 'onHpBelow': {
-      const n=midNode(e.node);
-      if(!n || n.owner!==1) return false;
-      return (n.pop||0) <= Math.max(1, Math.round((n.cap||1)*((e.pct||50)/100)));
-    }
-    case 'onGold':  return (gGold[1]||0) >= (e.n||0);
-    case 'onAlmostDefeat': {
-      if(gameTime < 20) return false;                 // 开局 20s 内不算濒危（避免开局兵少误判）
-      const mine=nodes.filter(n=>n.owner===1);
-      if(!mine.length) return false;
-      return mine.length<=1 && (ownerCap(1)/(totalCap()||1)) <= 0.15;
-    }
-    case 'onAlmostWin': {
-      const pct = e.pct==null ? 80 : e.pct;
-      return (ownerCap(1)/(totalCap()||1))*100 >= pct;
-    }
-    case 'onBetray':  return !!_betrayFired;
-    default: return false;
-  }
-}
-// —— 触发检测（update 内调用；简报/演出/终局期间不插嘴） ——
-function midTick(){
-  if(midBusy || dirBusy || !midQ.length || paused || finale) return;
-  for(let i=0;i<midQ.length;i++){
-    if(midCondMet(midQ[i])){ const e=midQ[i]; midQ.splice(i,1); midStart(e.seq); return; }
-  }
-}
-// —— 序列执行器（loop 内用真实时间推进：暂停时运镜/对白照常走） ——
-function midStart(seq){
-  if(!Array.isArray(seq) || !seq.length) return;
-  midSeq=seq; midIdx=0; midWait=0; midHold=false; midBusy=true;
-  midStep(0);
-}
-function midStep(rdt){
-  if(!midSeq) return;
-  if(midHold) return;                                   // 等异步元素（对白卡）
-  if(midWait>0){ midWait-=rdt; if(midWait>0) return; midWait=0; midIdx++; }
-  let guard=0;
-  while(midIdx<midSeq.length && guard++<64){
-    const w = midExec(midSeq[midIdx]) || 0;
-    if(w<0){ midHold=true; return; }
-    if(w>0){ midWait=w; return; }
-    midIdx++;
-  }
-  midEnd();
-}
-function midExec(s){
-  if(!s || typeof s!=='object') return 0;
-  // 子弹时间：倍率 + 时长（真实秒），到点由 loop 自动复位
-  if(Array.isArray(s.slowmo)){
-    timeScale = Math.max(0.05, Math.min(1, s.slowmo[0]));
-    timeScaleUntil = s.slowmo[1] || 1;
-    return timeScaleUntil;
-  }
-  if(typeof s.pause==='number'){ paused=true; midPausedByCine=true; return Math.min(2, s.pause); }
-  if(s.cam!==undefined){
-    const marks=dirResolveFocus(s.cam);
-    cineMarks = marks.map(n=>({ x:n.x, y:n.y, r:n.rad*1.35, label:s.label||'' }));
-    if(marks.length){
-      let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;
-      for(const m of cineMarks){ bx0=Math.min(bx0,m.x-m.r); by0=Math.min(by0,m.y-m.r); bx1=Math.max(bx1,m.x+m.r); by1=Math.max(by1,m.y+m.r); }
-      cine={ x:(bx0+bx1)/2, y:(by0+by1)/2, zoom:s.zoom||1.85 };
-    } else cine=null;
-    return s.dur!=null ? s.dur : 1.4;
-  }
-  if(s.vfx){ midVfx(s.vfx, s.at, s.dur||0.8); return s.dur||0.8; }
-  if(Array.isArray(s.dlg)){
-    paused=true; midPausedByCine=true;
-    startDialogueScene(s.dlg, true, ()=>{
-      midHold=false; midIdx++; midPausedByCine=false;
-      if(!midResume) paused=false;
-      midStep(0);
-    }, true);   // briefing 模式：不糊地图，镜头正在讲戏
-    return -1;
-  }
-  if(s.spawn){ midSpawn(s.spawn); return s.dur||0.35; }
-  if(s.buff){ midApplyBuff(s.buff); return 0; }
-  if(Array.isArray(s.toast)){ showToast(s.toast[0], s.toast[1], s.toast[2], s.toast[3]||2.5); return 0; }
-  if(s.sfx){ Sfx.play(s.sfx); return 0; }
-  if(s.fn && typeof MID_EDIT[s.fn]==='function'){ MID_EDIT[s.fn](s); return s.dur||0.4; }
-  return 0;
-}
-function midEnd(){
-  midSeq=null; midIdx=0; midWait=0; midHold=false; midBusy=false; midPausedByCine=false;
-  cine=null; cineMarks=[]; timeScale=1; timeScaleUntil=0;
-  if(midResume){                       // 败局反转：演出播完把战斗还回去
-    midResume=false;
-    paused=false; running=true;
-    lastTs = (typeof performance!=='undefined' && performance.now) ? performance.now() : lastTs;
-  } else if(paused && !dirBusy) paused=false;
-}
-// 点击跳过：演出造成的暂停可以点掉（这一下点击被吃掉，不会误派兵）
-function midSkip(){
-  if(!midBusy || !midPausedByCine || midHold) return false;
-  midWait=0; midPausedByCine=false; paused=false;
-  return true;
-}
-// —— 演出元素实现 ——
-function midVfx(kind, at, dur){
-  const col = MID_VFX[kind] || MID_VFX.gold;
-  let list = at ? dirResolveFocus(at) : [];
-  if(!list.length) list=[nodes.filter(n=>n.owner===1).sort((a,b)=>b.pop-a.pop)[0] || nodes[0]].filter(Boolean);
-  for(const n of list){
-    fx.push({ kind:'ring', x:n.x, y:n.y, life:dur, max:dur, r0:n.rad, r1:n.rad*3.4, color:col, vx:0, vy:0 });
-    spawnBurst(n.x, n.y, col);
-  }
-  if(kind==='shock') shake=Math.max(shake, 0.3);
-}
-function midSpawn(sp){
-  const owner = sp.owner || 1, total = sp.n || 8;
-  let list = sp.at ? dirResolveFocus(sp.at) : [];
-  if(!list.length) list=[nodes.filter(n=>n.owner===owner).sort((a,b)=>b.cap-a.cap)[0]].filter(Boolean);
-  if(!list.length) return;
-  const per = Math.max(1, Math.round(total/list.length));
-  for(const n of list){
-    n.pop = Math.min(n.cap, (n.pop||0)+per);
-    n.flash = 0.4;
-    fx.push({ kind:'ring', x:n.x, y:n.y, life:.6, max:.6, r0:n.rad, r1:n.rad*2.8, color:colOf(owner), vx:0, vy:0 });
-  }
-}
-function midApplyBuff(b){
-  midBuffState = { atk:b.atk||1, spd:b.spd||1, until:gameTime+(b.dur||10), owner:b.owner==null?1:b.owner };
-  if(b.label) floatText(W/2, G_TOP+70, b.label, '#ffd24a');
-}
-function midBuffOn(owner){
-  return midBuffState.until>gameTime && (midBuffState.owner==null || midBuffState.owner===owner);
 }
 
 // ===================== 成就页（列表渲染；解锁即时 Toast，此处只做展示） =====================
@@ -10581,7 +9566,7 @@ function deployFromSkillSelect(){
 
 function togglePause(){
   if(!running) return;
-  if(dirBusy || midBusy) return;   // 导演简报 / 局中演出期间不可手动暂停，避免打断演出状态
+  if(dirBusy) return;   // 导演简报（战斗内引导）期间不可手动暂停/继续，避免打断演出状态
   paused = !paused;
   document.getElementById("pauseBtn").textContent = paused ? "▶ 继续" : "❚❚ 暂停";
   document.getElementById("pauseOverlay").style.display = paused ? "flex" : "none";
@@ -10592,7 +9577,6 @@ function togglePause(){
 document.getElementById("restartInPause").onclick=()=>{
   Sfx.play("ui");
   paused=false; dirBusy=false; cine=null; cineMarks=[];
-  midSeq=null; midBusy=false; midHold=false; midWait=0; midPausedByCine=false; midResume=false; timeScale=1; timeScaleUntil=0;
   document.getElementById('dialogueScene').style.display='none';   // 导演简报中重开 → 收掉对白遮罩
   document.getElementById("pauseBtn").textContent="❚❚ 暂停";
   document.getElementById("pauseOverlay").style.display="none";

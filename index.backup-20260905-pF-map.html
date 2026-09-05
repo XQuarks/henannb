@@ -2480,7 +2480,7 @@ function translateCoast(ox,oy){ transformCoast(1,ox,oy); }
 // 被啃掉的格转成 '~'（与江水同套阻挡），但标记 sea=true → 渲染层跳过湖面绘制（那是外海，不是湖）。
 const FIXED_PROT=new Set(['P','2','3','B','T','G','X','M','K','S','F','N','H','Z','a','m','r','s','w','e']);
 function carveFixedCoast(M, seeds, step, rng){
-  const land=seeds.filter(s=>s.ch!=='~' && s.ch!=='^' && s.ch!=='.');
+  const land=seeds.filter(s=>s.ch!=='~' && s.ch!=='^');
   if(land.length<14) return 0;
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   for(const s of land){ x0=Math.min(x0,s.x); y0=Math.min(y0,s.y); x1=Math.max(x1,s.x); y1=Math.max(y1,s.y); }
@@ -2506,7 +2506,7 @@ function carveFixedCoast(M, seeds, step, rng){
   // 斜对角边（新啃出的湖面正好卡在斜角之间），按八邻验「连通」会漏判（天龙 L1 实测踩坑）。
   // 四邻连通 ⇒ 八邻候选下必然连通，保守但绝不切断地图。
   const gridConn=()=>{
-    const alive=seeds.filter(s=>s.ch!=='~' && s.ch!=='^' && s.ch!=='.');
+    const alive=seeds.filter(s=>s.ch!=='~' && s.ch!=='^');
     if(!alive.length) return false;
     const key=s=>s.c+'|'+s.r, seen=new Set([key(alive[0])]), q=[alive[0]];
     while(q.length){
@@ -3235,9 +3235,6 @@ const BRG = { cols:7, rows:3, river:3, bridgeRow:1, pad:1 };
 // 网格字符表：
 //   归属  v 中立村 / P 玩家大本营 / 2·3 两家敌方基地 / ~ 水（江·湖）
 //   障碍  ^ 山体（不可通行：与水共用 LAKES 阻挡，渲染成岩石堆）
-//   外海  . 这里没有地块 —— 用它手画有机海岸线（岛形/海湾），比自动椭圆雕刻可控得多。
-//         含 '.' 的图会跳过 carveFixedCoast，轮廓完全由网格决定。
-//         与水/山共用 LAKES 阻挡，但渲染时什么都不画 → 露出背景，等于"陆地之外的海"。
 //   建筑  B 碉堡(关隘·中立) / T 箭塔 / G 金顶塔 / X Boss要塞 / M 巨城 / K 王帐(归敌方2)
 //         S 龙神祭坛 / F 符文熔炉 / N 麦仓 / H 货栈 / Z 湖心宝箱
 //   兵营  a 弓兵营 / m 法师营 / r 盗贼营 / s 重械营
@@ -3246,16 +3243,10 @@ const BRG = { cols:7, rows:3, river:3, bridgeRow:1, pad:1 };
 //              bunkerCap/bunkerPop 碉堡容量驻军
 const LEVEL_MAPS={
   // —— 四个桥关（第五批手写，此处迁入通用表；岸上摆山体做点缀）——
-  // 批次F：原 7×3 扁平长条（江两岸各一行，整图是条横带）。改用 '.' 手画成被江劈开的
-  // 葫芦形陆块 —— 北岸宽、南岸窄，最宽处正好是桥行。江与外海连成一片（同为水色系），
-  // 海岸线描边负责把「陆地 / 江 / 外海」三者分开。
-  // 桥关铁律不变：江列(3)上下由 pad 外扩贯穿，全图只有 w-B-e 一条通路。
-  dusk:{ cols:7, rows:5, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // 人类 L2 渡口阻击
-    grid:['..v~vv.',
-          '.vv~v2.',
+  dusk:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // 人类 L2 渡口阻击
+    grid:['^vv~v2v',
           'vPwBevv',
-          '.vv~v3.',
-          '..v~v..'] },
+          'vvv~v3^'] },
   burn:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:28, bunkerPop:16, // 天龙 L2 焚断桥
     grid:['vvT~v2v',
           'vPwBevv',
@@ -3271,15 +3262,11 @@ const LEVEL_MAPS={
 
   // —— 第七批：四族 L1 教学关（原 teach 骨架共用同一张图，四族体验完全一样）——
   // 每张都摆了山/水当障碍：新手在第一关就该见到「地形会挡路、要绕」
-  // 批次F：改用 '.' 手画海岸线 —— 原先 6×4 满格矩形靠自动椭圆雕刻，只啃得掉四角（22% 上限），
-  // 主体仍是方块。现在挖成北宽南窄的半岛：玩家在南岸登陆，两家哥布林盘踞北岸，
-  // 中央麦田(N)是双方争夺的粮仓，岬角上的箭塔(T)卡住东侧陆桥。
-  h1:{ cols:7, rows:5,
-    grid:['..^vvv.',
-          '.vvNv3.',
-          'vPvvTvv',
-          '.vvvv2.',
-          '..vv^..'] },
+  h1:{ cols:6, rows:4,   // 人类 L1 烽火边境：团块布局，粮仓居中，四角山体啃出岛形
+    grid:['^vvv3v',
+          'vvvNvv',
+          'vPvvTv',
+          'vvvv2^'] },
   g1:{ cols:6, rows:4,   // 天龙 L1 蝼蚁的村庄：水塘横在村中，两角山体收边
     grid:['vvvv2^',
           'vv~vvv',
@@ -3413,17 +3400,14 @@ function buildFixedMap(cx,cy,mapId,md){
       x: cx + rx*step + (rng()-0.5)*step*JIT,
       y: cy + ry*step + (rng()-0.5)*step*JIT });
   };
-  M.grid.forEach((line,r)=>{ for(let c=0;c<cols;c++) put(c,r,line[c]===undefined ? 'v' : line[c]); });
+  M.grid.forEach((line,r)=>{ for(let c=0;c<cols;c++) put(c,r,line[c]||'v'); });
   // 桥图专用：江所在列上下各外扩 pad 格，让江贯穿出图外 —— 天险得真的绕不过去
   if(M.river!=null){ for(let k=1;k<=pad;k++){ put(M.river,-k,'~'); put(M.river,rows-1+k,'~'); } }
 
   // 批次A：海岸线雕刻 —— 把手写矩形网格的边角啃成有机海岸。
   // 保护字符（基地/建筑/兵营/桥面）不啃；每啃一格都做网格 BFS 连通校验；
   // 被啃的格标 sea=true → 阻挡照旧（进 LAKES），渲染跳过湖面样式（那是外海）。
-  // 手写轮廓优先：网格里只要出现 '.'（外海），就说明形状是设计师画死的，
-  // 不再走自动海岸雕刻 —— 否则随机椭圆会把精心画的轮廓再啃歪一圈。
-  const handShaped = M.grid.some(l=>l.indexOf('.')>=0);
-  if(!handShaped) carveFixedCoast(M, seeds, step, rng);
+  carveFixedCoast(M, seeds, step, rng);
 
   // Voronoi：种子互切出地块多边形（与随机关卡同一套算法，观感才一致）
   let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;
@@ -3448,12 +3432,13 @@ function buildFixedMap(cx,cy,mapId,md){
   const pb=playerBuffs();
   for(const cc of cells){
     const s=cc.s, ch=s.ch;
-    // '~'=水（画湖面）'^'=山（画岩石）'.'=外海（什么都不画，露出背景）
-    // 三者共用同一套阻挡（都进 LAKES），区别只在渲染。
-    if(ch==='~'||ch==='^'||ch==='.'){
+    if(ch==='~'||ch==='^'){
+      // 山(^)与水(~)共用同一套阻挡：都进 LAKES，inLake / pairGate 一行不改。
+      // 区别只在渲染 —— 水画湖面，山画岩石堆（MOUNTAINS 记住引用）。
+      // 海岸雕刻啃出来的格外标 SEACELLS：那是陆地外的海，不画湖面样式（批次A）。
       LAKES.push(cc.cell);
       if(ch==='^') MOUNTAINS.add(cc.cell);
-      if(s.sea || ch==='.') SEACELLS.add(cc.cell);
+      if(s.sea) SEACELLS.add(cc.cell);
       continue;
     }
     // 字符 → 属性。容量/驻军全部对齐随机路径 giveType 的口径，避免两套数值打架。
@@ -5674,22 +5659,12 @@ function draw(){
   }
 
   // 1) 陆地投影：所有地块合成一条路径 → 阴影只落在外轮廓，树状大陆整体浮起
-  // 1.5) 海岸线：同一条路径描一圈滩涂粗边。先描后铺色（见 pass 1）——
-  //      内部共享边的滩涂会被相邻地块的填充盖掉，只剩真正的外轮廓露出来。
-  //      这圈边同时勾出「陆↔湖」「陆↔江」「陆↔外海」三种边界：
-  //      此前湖水色与背景海同属青色系，水陆糊成一片，靠这一圈才分得开。
   ctx.beginPath();
   for(const n of nodes) drawPath(n.poly, 1);
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 8;
   ctx.fillStyle = B.shadow; ctx.fill();
   ctx.restore();
-  if(B.coast){
-    ctx.save();
-    ctx.lineJoin="round"; ctx.lineWidth=9;
-    ctx.strokeStyle = B.coast; ctx.stroke();
-    ctx.restore();
-  }
 
   // 2) 地表颗粒纹理 + 漂浮微尘氛围
   drawIslandGrain();

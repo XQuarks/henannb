@@ -114,7 +114,7 @@ stageLv('human', 7);
 T('人类L7 图上有重械营（此前从未放置的 bug 已修）', nodes.some(n=>n.type==='siege')===true);
 lastMode='pvp'; pendingCampLevel=null;
 buildMap(pickTemplate(), null);
-T('自由对战图不受门控（默认含法师营）', nodes.some(n=>n.type==='mage')===true || SKEL.camps6.mods.camps==null);
+T('自由对战图不受门控（默认含法师营）', nodes.some(n=>n.type==='mage')===true || SKEL.camps7.mods.camps==null);
 
 // ========== D. 固定教学地图（seed 确定性） ==========
 console.log('D. 固定教学地图');
@@ -126,8 +126,13 @@ buildMap('M3', null);
 const snapR=nodes.map(n=>Math.round(n.x)+'_'+Math.round(n.y)).join('|');
 T('同 seed 两次布图布局完全一致', snap1===snap2);
 T('无 seed 时布局不同（随机性保留）', snap1!==snapR);
-T('tutBridge 骨架带 seed', SKEL.tutBridge.mods.seed!=null);
-T('教学关骨架带固定 seed（L1/L3/L5/L6 独占骨架）', SKEL.teach.mods.seed!=null && SKEL.harvest.mods.seed!=null && SKEL.fog.mods.seed!=null && SKEL.pincer.mods.seed!=null);
+// v7：tutBridge 不再靠 seed 固定布局（种子只能复现「那张随机图」，保证不了它合不合理），
+// 改成手写网格 M6 + fixedMap，见 e2e-fixed-bridge.js。
+T('tutBridge 骨架走手写固定地图（M6 + fixedMap）', SKEL.tutBridge.tpl==='M6' && SKEL.tutBridge.mods.fixedMap==='dusk');
+// 第七批：teach 也从「seed 固定随机图」升级为手写固定图（四族各一张 h1/g1/b1/d1），
+// 所以 seed 断言只保留其余三个独占骨架（人类 L3 抢收 / L5 雾中 / L6 两线）。
+T('人类独占骨架带固定 seed（L3/L5/L6）', SKEL.harvest.mods.seed!=null && SKEL.fog.mods.seed!=null && SKEL.pincer.mods.seed!=null);
+T('teach 骨架改为手写固定图（M6，四族不共用一张图）', SKEL.teach.tpl==='M6' && SKEL.teach.mods.seed==null);
 T('人类L7 引导骨架 tutSiege 带 seed 且独立于共用 siege', SKEL.tutSiege && SKEL.tutSiege.mods.seed!=null && SKEL.siege.mods.seed==null);
 T('人类L1 带开场导演简报（先进导演讲领地，再挂拖拽引导）', !!campLv('human',1).dir && !!GUIDES.l1);
 
@@ -248,16 +253,13 @@ T('技能课介绍步自动进入实操步', guide.i===1);
 doCast('rush', null);
 T('技能施放推进技能课', guide.i===2);
 guide=null; aiFrozen=false; cineMarks=[]; tutHide();
-// 兵营占领课事件匹配类型
+// 麦仓占领课事件匹配类型（批次C：人类 L5 已换为「湖畔粮道」，引导课指麦仓）
 guideBegin('l5');
 arriveBall(nodes.find(n=>n.type==='village'&&n.owner===0)||nodes[nodes.length-1], 1, {cls:'melee'});
 guideEvent('capture',{node:{type:'village'}});
-T('占领非弓兵营不推进', guide.i===0);
-const archCamp=nodes.find(n=>n.type==='archery');
-if(archCamp){ archCamp.pop=0; }
-else { nodes[1].type='archery'; nodes[1].pop=0; nodes[1].defAcc=0; }
-guideEvent('capture',{node:{type:'archery'}});
-T('占领弓箭手兵营 → 推进克制课', guide.i===1);
+T('占领普通村庄不推进', guide.i===0);
+guideEvent('capture',{node:{type:'barn'}});
+T('占领麦仓 → 推进粮道课', guide.i===1);
 guide=null; aiFrozen=false; cineMarks=[]; tutHide();
 
 // ========== H. 引导触发接线（launchBattle 条件） ==========

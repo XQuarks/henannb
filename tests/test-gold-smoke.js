@@ -190,7 +190,7 @@ T('未选技能时出击直拦不生效', running===wasRunning);
 // —— 终局占领演出：攻下最后一城 → 镜头推近 + 慢动作放完特效 → 缓缓弹出结算 ——
 pendingCampLevel=1; campRace='goblin'; lastMode='camp'; raceMode='camp';
 stageBattle(); launchBattle();
-T('开局正常进行（无终局演出）', running===true && finale===null && cam.zoom===1);
+T('开局正常进行（无终局演出）', running===true && finale===null && Math.abs(cam.zoom-camHome.zoom)<0.01);   // 批次A：开局相机=全景归位点（大地图 home zoom≠1）
 for(const n of nodes){ if(n.owner!==1){ n.owner=1; n.pop=1; n.conquer=0.85; _lastCapNode=n; } }
 update(0.016);   // 胜利判定应触发终局演出，而不是立即弹结算
 T('攻下最后敌建 → 进入终局演出且不立即结算', finale!==null && running===true
@@ -200,7 +200,11 @@ T('镜头缓缓推向刚占领的建筑', cam.zoom>1.2);
 const scFull=finaleScale(); finale.t=0.7; const scSlow=finaleScale();
 T('表现速度缓入慢动作（全速 → 0.22×）', scFull>0.9 && Math.abs(scSlow-0.22)<0.02);
 tickFinale(99);  // 快进：让演出播完
-T('演出播完 → 结算以 slow 模式缓缓出现', running===false && bannerSlow===false
+// ㉒ 胜利尾声对白幕：终局演完后、结算横幅之前先播 2~4 句尾声对白，播完才弹横幅
+T('终局演完 → 先播胜利尾声对白幕（横幅尚未弹出）', running===false && _outroDone===true
+  && document.getElementById('banner').style.display!=='flex');
+dlgFinish();   // 尾声对白播完 → 回调回 endGame → 正常弹横幅
+T('尾声播完 → 结算以 slow 模式缓缓出现', running===false && bannerSlow===false
   && document.getElementById('banner').style.display==='flex'
   && document.getElementById('banner').classList.list.includes('slow'));
 running=false; finale=null;
@@ -217,6 +221,9 @@ fastWinSettle();                     // 点击「胜利在望」的处理函数
 T('点击「胜利在望」→ 进入终局演出而非立即结算', finale!==null && running===true
   && document.getElementById('banner').style.display!=='flex');
 tickFinale(99);
+T('速胜路径同样先播尾声幕（横幅尚未弹出）', _outroDone===true
+  && document.getElementById('banner').style.display!=='flex');
+dlgFinish();
 T('速胜路径演出播完 → 缓缓弹出胜利结算', running===false
   && document.getElementById('banner').classList.list.includes('slow')
   && document.getElementById('bannerTitle').className==='win');
