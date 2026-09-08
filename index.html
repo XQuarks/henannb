@@ -1130,7 +1130,7 @@
       </div>
       <div class="ss-stats" id="ssStats" data-page-node-id="D9GgfnliIRTD8wMkUhoacC"></div>
       <div class="ss-foot-row" data-page-node-id="L0IUY2NvaOZ8xpiyUpa0h7">
-        <button id="achBtn" class="ss-ach" data-page-node-id="g4v5KyqD8Xq4sEbKgz4GAj">★ 成就 <b id="achCnt" data-page-node-id="k7BDPyWFB0UxRKh94dSzg4">0/11</b></button>
+        <button id="achBtn" class="ss-ach" data-page-node-id="g4v5KyqD8Xq4sEbKgz4GAj">★ 成就 <b id="achCnt" data-page-node-id="k7BDPyWFB0UxRKh94dSzg4">0/12</b></button>
         <span class="ss-foot" data-page-node-id="T3sibJaRoSXNXz5rbloMjp">按住节点拖向目标派兵 · 长按再拖 = 半军 · 胜局得金币与装备掉落</span>
       </div>
     </div>
@@ -1515,7 +1515,22 @@ function getProg(){
   _progCache = p;
   return p;
 }
-function saveProg(p){ _progCache = p; localStorage.setItem(SAVE_KEY, JSON.stringify(p)); }
+// 落盘失败绝不能中断游戏（无痕模式 / iOS 存储限制 / 配额满都会让 setItem 抛异常）。
+// 之前这里是裸调用 —— 一抛就把整条调用链打断，最典型的是「出击」按钮：
+// deployFromSkillSelect 第 3 行就 saveProg，抛了后面的 stageBattle() 全不执行，
+// 玩家表现为「选了技能、点了出击、毫无反应 = 进不了关卡」。
+// 现在：内存进度照常生效保证本局能玩，首次失败弹一次提示，告诉玩家刷新会丢档。
+let _saveWarned=false;
+function saveProg(p){
+  _progCache = p;                                   // 内存进度始终有效，本局继续可玩
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(p)); }
+  catch(e){
+    if(_saveWarned) return;
+    _saveWarned = true;
+    console.warn('[存档] localStorage 写入失败，进度只保留在本次会话：', e);
+    try{ showToast('⚠','进度无法保存','浏览器存储被禁用或已满，关掉页面后进度会丢失',4.5); }catch(_){}
+  }
+}
 // 战役进度（统一之路）：分种族推进，stage=当前可挑战关（1..10）
 const CAMP_MAX=10;
 function getCampaign(race){ const c=getProg().camp; return c[race]||1; }
@@ -1713,6 +1728,8 @@ let MOUNTAINS=new Set();
 // 外海格（批次A 固定图海岸雕刻）：阻挡同样复用 LAKES，但渲染跳过湖面样式——那是陆地外的海，
 // 不是陆地里的湖。用 Set 存多边形引用做身份识别（与 MOUNTAINS 同手法）。
 let SEACELLS=new Set();
+let REEFS=[];            // 外海碎礁：纯视觉过渡带，让陆地边缘不是一刀切（不参与邻接/阻挡判定）
+let COASTREEF=new Set(); // 本局哪些外海格「贴着陆」——只有这些格才铺碎礁
 // 定时事件状态
 let evActive=null, evNextAt=0;
 // 技能/装备运行态：携带技能、冷却时刻、瞄准态、局内增益计时、地雷阵、AI 携带技
@@ -1935,6 +1952,30 @@ function clipEdge(p, q, sd){
   if(!isFinite(t)) t=0.5;
   t = Math.max(0, Math.min(1, t));
   return { x: p.x+(q.x-p.x)*t, y: p.y+(q.y-p.y)*t };
+}
+function clipPolyW(poly, a, b, wa, wb){
+  if(poly.length<3) return [];
+  const dx=b.x-a.x, dy=b.y-a.y, dd=dx*dx+dy*dy;
+  if(dd<1e-9) return poly;
+  const K=((b.x*b.x+b.y*b.y)-wb-(a.x*a.x+a.y*a.y)+wa)/2;
+  const t=(K-(a.x*dx+a.y*dy))/dd;
+  const mx=a.x+t*dx, my=a.y+t*dy;
+  const sd = p => (p.x-mx)*dx + (p.y-my)*dy;
+  const out=[];
+  let prev=poly[poly.length-1];
+  let prevIn = sd(prev) <= 0;
+  for(let i=0;i<poly.length;i++){
+    const cur=poly[i];
+    const curIn = sd(cur) <= 0;
+    if(curIn){
+      if(!prevIn) out.push(clipEdge(prev, cur, sd));
+      out.push(cur);
+    } else if(prevIn){
+      out.push(clipEdge(prev, cur, sd));
+    }
+    prev=cur; prevIn=curIn;
+  }
+  return out;
 }
 function clipPoly(poly, a, b){
   if(poly.length<3) return [];
@@ -3250,12 +3291,14 @@ const LEVEL_MAPS={
   // 葫芦形陆块 —— 北岸宽、南岸窄，最宽处正好是桥行。江与外海连成一片（同为水色系），
   // 海岸线描边负责把「陆地 / 江 / 外海」三者分开。
   // 桥关铁律不变：江列(3)上下由 pad 外扩贯穿，全图只有 w-B-e 一条通路。
-  dusk:{ cols:7, rows:5, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // 人类 L2 渡口阻击
-    grid:['..v~vv.',
-          '.vv~v2.',
-          'vPwBevv',
-          '.vv~v3.',
-          '..v~v..'] },
+  dusk:{ cols:7, rows:7, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // L2 渡口阻击 · 重做
+    grid:['...~...',
+          '..v~2v.',
+          '.Pv~vv.',
+          '.vwBe3.',
+          '.vv~T..',
+          '.N.^...',
+          '...~...'] },
   burn:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:28, bunkerPop:16, // 天龙 L2 焚断桥
     grid:['vvT~v2v',
           'vPwBevv',
@@ -3274,12 +3317,14 @@ const LEVEL_MAPS={
   // 批次F：改用 '.' 手画海岸线 —— 原先 6×4 满格矩形靠自动椭圆雕刻，只啃得掉四角（22% 上限），
   // 主体仍是方块。现在挖成北宽南窄的半岛：玩家在南岸登陆，两家哥布林盘踞北岸，
   // 中央麦田(N)是双方争夺的粮仓，岬角上的箭塔(T)卡住东侧陆桥。
-  h1:{ cols:7, rows:5,
-    grid:['..^vvv.',
-          '.vvNv3.',
-          'vPvvTvv',
-          '.vvvv2.',
-          '..vv^..'] },
+  h1:{ cols:7, rows:7,   // L1 烽火边境 · 重做
+    grid:['.......',
+          '.^^.2..',
+          '..vvv..',
+          '.vNTv..',
+          '.vvvv..',
+          '.P..v3.',
+          '.......'] },
   g1:{ cols:6, rows:4,   // 天龙 L1 蝼蚁的村庄：水塘横在村中，两角山体收边
     grid:['vvvv2^',
           'vv~vvv',
@@ -3409,11 +3454,26 @@ function buildFixedMap(cx,cy,mapId,md){
     // 抖动再大也不会改变拓扑 —— 但 pairGate 的穿水校验走真实几何（沿中心连线采样 12 点，
     // 容差 1 点），所以幅度有上限。实测 0.22 安全，0.30 起会零星掉边。
     const JIT = 0.12;
-    seeds.push({ c, r, ch,
+    const _CW={'2':0.303,'3':0.303,'P':0.468,'N':0.055,'T':-0.110,'^':-0.165,'v':-0.099,'w':-0.055,'B':-0.055,'e':-0.055,'~':0.000};
+    seeds.push({ c, r, ch, w:((_CW[ch]!=null?_CW[ch]:0)*step*step),
       x: cx + rx*step + (rng()-0.5)*step*JIT,
       y: cy + ry*step + (rng()-0.5)*step*JIT });
   };
   M.grid.forEach((line,r)=>{ for(let c=0;c<cols;c++) put(c,r,line[c]===undefined ? 'v' : line[c]); });
+  { // 低频噪声场：空间相关位移 —— 局部相对位移小（不掉边），大范围连绵起伏（形状有机）
+    const w=[];
+    for(let i=0;i<4;i++) w.push({ fx:(0.55+rng()*0.85)/step, fy:(0.55+rng()*0.85)/step,
+                                  px:rng()*6.283, py:rng()*6.283, a:(rng()-0.5)*2 });
+    for(const s of seeds){
+      if(s.ch==='~'||s.ch==='w'||s.ch==='e'||s.ch==='B') continue;   // 江面与桥面必须保持笔直
+      let dx=0, dy=0;
+      for(const q of w){
+        dx += Math.sin(s.x*q.fx+q.px)*Math.cos(s.y*q.fy*0.7+q.py)*q.a;
+        dy += Math.cos(s.x*q.fy+q.py)*Math.sin(s.y*q.fx*0.7+q.px)*q.a;
+      }
+      s.x += dx*step*0.42; s.y += dy*step*0.42;
+    }
+  }
   // 桥图专用：江所在列上下各外扩 pad 格，让江贯穿出图外 —— 天险得真的绕不过去
   if(M.river!=null){ for(let k=1;k<=pad;k++){ put(M.river,-k,'~'); put(M.river,rows-1+k,'~'); } }
 
@@ -3428,24 +3488,82 @@ function buildFixedMap(cx,cy,mapId,md){
   // Voronoi：种子互切出地块多边形（与随机关卡同一套算法，观感才一致）
   let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;
   for(const s of seeds){ bx0=Math.min(bx0,s.x); bx1=Math.max(bx1,s.x); by0=Math.min(by0,s.y); by1=Math.max(by1,s.y); }
+
   const ex=step*0.62;   // 外扩：否则最外圈地块会被包围盒裁成半截
   bx0-=ex; by0-=ex; bx1+=ex; by1+=ex;
-  const RECT=[{x:bx0,y:by0},{x:bx1,y:by0},{x:bx1,y:by1},{x:bx0,y:by1}];
+  const RECT=(function(){
+    const N=3, amp=step*0.32, pts=[];
+    const jj=()=> (rng()-0.5)*2*amp;
+    for(let i=0;i<=N;i++) pts.push({x:bx0+(bx1-bx0)*i/N, y:by0+jj()});
+    for(let i=1;i<=N;i++) pts.push({x:bx1+jj(),        y:by0+(by1-by0)*i/N});
+    for(let i=1;i<=N;i++) pts.push({x:bx1-(bx1-bx0)*i/N, y:by1+jj()});
+    for(let i=1;i<N;i++)  pts.push({x:bx0+jj(),        y:by1-(by1-by0)*i/N});
+    return pts;
+  })();
   const cells=[];
   for(let i=0;i<seeds.length;i++){
     let cell=[...RECT];
     for(let j=0;j<seeds.length;j++){
       if(i===j) continue;
-      cell=clipPoly(cell, seeds[i], seeds[j]);
+      cell=clipPolyW(cell, seeds[i], seeds[j], seeds[i].w||0, seeds[j].w||0);
       if(cell.length<3) break;
     }
     if(cell.length<3) continue;
     cells.push({ s:seeds[i], cell, cg:polygonCentroid(cell) });
   }
   if(cells.length<12) return false;
+  {
+    const SEG=2, AMP=step*0.22;
+    const hs=(s)=>{ let x=2166136261>>>0; for(let i=0;i<s.length;i++){ x^=s.charCodeAt(i); x=Math.imul(x,16777619)>>>0; } return (x>>>0)/4294967296; };
+    const midsFor=(A,B)=>{
+      // 键必须高精度：原始世界坐标量级只有 0~7，toFixed(1) 会让大批不同的边撞成同一个键，
+      // 细分点被张冠李戴 → 多边形直接炸成锯齿（实测自交）。再挂上边长做二次区分。
+      const ka=A.x.toFixed(4)+','+A.y.toFixed(4), kb=B.x.toFixed(4)+','+B.y.toFixed(4);
+      const rev = !(ka<kb);               // 端点规范化，保证两块算的是同一条边
+      const p0 = rev? B : A, q0 = rev? A : B;
+      const k=(ka<kb?ka:kb)+'|'+(ka<kb?kb:ka)+'|'+Math.hypot(B.x-A.x,B.y-A.y).toFixed(4);
+      // 这里刻意不做 cache：实测缓存命中会让细分点张冠李戴（多边形直接炸成锯齿）。
+      // 计算本身是纯确定性的（同样的端点 → 同样的细分点），所以两侧共享边天然一致，
+      // 缓存只是省性能，不省正确性 —— 几百条边的量级，直接重算完全够快。
+      const px=p0.x, py=p0.y, qx=q0.x, qy=q0.y;
+      const dx=qx-px, dy=qy-py, L=Math.hypot(dx,dy)||1;
+      const nx=-dy/L, ny=dx/L, amp=AMP*Math.min(1, L/(step*0.7));
+      const arr=[];
+      for(let s=1;s<SEG;s++){
+        const t=s/SEG + (hs(k+'@'+s)-0.5)*0.10;
+        const r=(hs(k+'#'+s)-0.5)*2*amp;
+        arr.push({x:px+dx*t+nx*r, y:py+dy*t+ny*r});
+      }
+      return {m:arr, rev};
+    };
+    const nc=[];
+    for(const cc of cells){
+      const P=cc.cell, n=P.length, np=[];
+      for(let i=0;i<n;i++){
+        const A=P[i], B=P[(i+1)%n];
+        np.push(A);
+        const r=midsFor(A,B);
+        if(!r.rev){ for(let z=0;z<r.m.length;z++) np.push(r.m[z]); }
+        else      { for(let z=r.m.length-1;z>=0;z--) np.push(r.m[z]); }
+      }
+      nc.push({ s:cc.s, cell:np, cg:cc.cg });
+    }
+    cells.length=0; for(const c of nc) cells.push(c);
+  }
 
-  LAKES=[]; MOUNTAINS=new Set(); SEACELLS=new Set();
+  LAKES=[]; MOUNTAINS=new Set(); SEACELLS=new Set(); REEFS=[];
   const pb=playerBuffs();
+  // 碎礁只铺「紧贴陆地的一圈外海格」做海岸过渡 —— 全铺会满屏礁石（实测 L1 32 块），反而更碎。
+  { const _land=new Set();
+    for(const s of seeds){ if(s.ch!=='.' && s.ch!=='~') _land.add(s.c+','+s.r); }
+    COASTREEF=new Set();
+    for(const s of seeds){ if(s.ch!=='.') continue;
+      for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
+        if(!dc && !dr) continue;
+        if(_land.has((s.c+dc)+','+(s.r+dr))) COASTREEF.add(s.c+','+s.r);
+      }
+    }
+  }
   for(const cc of cells){
     const s=cc.s, ch=s.ch;
     // '~'=水（画湖面）'^'=山（画岩石）'.'=外海（什么都不画，露出背景）
@@ -3454,6 +3572,7 @@ function buildFixedMap(cx,cy,mapId,md){
       LAKES.push(cc.cell);
       if(ch==='^') MOUNTAINS.add(cc.cell);
       if(s.sea || ch==='.') SEACELLS.add(cc.cell);
+      if(ch==='.' && COASTREEF.has(s.c+','+s.r)){ const g0=polygonCentroid(cc.cell); REEFS.push(cc.cell.map(p=>({x:g0.x+(p.x-g0.x)*0.34,y:g0.y+(p.y-g0.y)*0.34}))); }
       continue;
     }
     // 字符 → 属性。容量/驻军全部对齐随机路径 giveType 的口径，避免两套数值打架。
@@ -5730,6 +5849,18 @@ function draw(){
       ctx.globalAlpha=(0.35+0.65*Math.abs(Math.sin(gameTime*1.7+i*1.3)))*0.85;
       ctx.beginPath(); ctx.arc(px,py,1.6,0,Math.PI*2);
       ctx.fillStyle="#ff8a3c"; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 3.45) 外海碎礁：'.' 外海格缩到 42% 画成暗礁，让陆地边缘有渐变过渡，不再是硬切的一刀。
+  //       纯视觉 —— REEFS 不进 LAKES、不参与邻接/阻挡/命中判定，玩法零影响。
+  if(REEFS && REEFS.length){
+    ctx.save();
+    for(const R of REEFS){
+      ctx.beginPath(); drawPath(R, 1);
+      ctx.fillStyle="rgba(26,38,43,0.30)"; ctx.fill();
+      ctx.lineWidth=1; ctx.strokeStyle="rgba(190,205,210,0.14)"; ctx.stroke();
     }
     ctx.restore();
   }
@@ -10659,7 +10790,7 @@ Sfx.vol = Math.min(1, Math.max(0, parseFloat(localStorage.getItem(VOL_KEY)) || 0
 volSlider.value = Math.round(Sfx.vol*100);
 volSlider.addEventListener("input", ()=>{
   Sfx.vol = volSlider.value/100;
-  localStorage.setItem(VOL_KEY, String(Sfx.vol));
+  try{ localStorage.setItem(VOL_KEY, String(Sfx.vol)); }catch(e){}   // 存储不可用时静默降级，不打断音量调节
   Sfx.play("ui");
 });
 
@@ -10690,7 +10821,7 @@ document.getElementById("settingsBtn").onclick=()=>{
 };
 setVol.addEventListener("input", ()=>{
   Sfx.vol = setVol.value/100;
-  localStorage.setItem(VOL_KEY, String(Sfx.vol));
+  try{ localStorage.setItem(VOL_KEY, String(Sfx.vol)); }catch(e){}   // 存储不可用时静默降级，不打断音量调节
   volSlider.value = setVol.value;   // 与暂停菜单滑杆保持同步
   Sfx.play("ui");
 });
