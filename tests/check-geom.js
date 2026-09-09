@@ -6,10 +6,15 @@
 const fs=require('fs');
 const path=require('path');
 // 默认校验「当前实机」快照（gen-final-map.js 产出）；给参数 compare 则校验历史方案快照。
-const finalP = path.join(__dirname,'_snaps_final.json');
-const histP  = path.join(__dirname,'_snaps.json');
+const finalP = path.join(__dirname,'_out','_snaps.json');   // 生成物，统一放 tests/_out/
+const histP  = path.join(__dirname,'_snaps.json');          // 历史方案快照（若保留）
 const srcP   = (process.argv[2]==='compare' && fs.existsSync(histP)) ? histP : finalP;
-if(!fs.existsSync(srcP)) throw new Error('找不到快照 '+srcP+'，先跑 node tests/gen-final-map.js');
+if(!fs.existsSync(srcP)){
+  // 快照不入库，缺失时直接自动生成，不再要求手工先跑 gen-final-map.js
+  console.log('快照缺失，先自动生成：node tests/gen-final-map.js');
+  require('child_process').execSync('node "'+path.join(__dirname,'gen-final-map.js')+'"', {stdio:'inherit'});
+}
+if(!fs.existsSync(srcP)) throw new Error('快照生成失败：'+srcP);
 const all=JSON.parse(fs.readFileSync(srcP,'utf8'));
 
 const segInt=(p1,p2,p3,p4)=>{

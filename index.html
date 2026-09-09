@@ -1234,6 +1234,13 @@ const CFG = {
   bossPulseR: 120,       // Boss 要塞 AOE 脉冲半径 px（每 8s 清除圈内所有球）
   recallWin: 3,          // 召回窗口 s：出兵后点出发村可撤回该队（v5.1 由 0.9 放宽，旧值几乎不可能按到）
   recallWinVeteran: 6,   // 人类·老兵方阵分支：召回窗口延长到 6s
+  // —— H-2 关隘（三门渡口）：刚易主的门短时间内不可再易主，避免双方拉锯把门当乒乓球 ——
+  gateLock: 8,           // 关隘易主后的锁定时长 s（期间打光驻军也先吊住 1 兵，不掉旗）
+  foeBarkGap: 5,         // 敌方指挥官喊话最小间隔 s（防刷屏；覆灭遗言 down 不受此限）
+  // —— H-1 焦土复原（人类 L1）——
+  charRestore: 20,       // 夺回焦土村后「火灭地复」所需秒数
+  charCapBack: 20,       // 复原后回到的正常村庄容量（焦土期只有 12）
+  charGrowMul: 0.5,      // 焦土期产能倍率（减半：地烧坏了，产不出兵）
   // —— 第二批剧情经济机制（LEVEL-DESIGN-PROPOSAL §4.1）——
   tollGold: 1,                               // 过路费（哥布林 L2）：己方兵球经过己方桥面格的入账（每颗球全程只交一次）
   goldLeafStep: 5,                           // 刮金箔（哥布林 L4）：占住金顶塔每 5s 入账一次
@@ -2764,7 +2771,7 @@ const SKEL={
   // tutBridge 原为 M3 双陆桥 + 固定种子。种子只能保证「同一张随机结果反复出现」，
   // 保证不了这张图本身合不合理 —— 玩家实测反馈碉堡紧贴敌方基地、离自己老远。
   // 改成手写网格：桥居中、碉堡居中、你 2 步 / 敌方 3 步，位置由人而不是由随机数决定。
-  tutBridge:{ tpl:'M6', mods:{fixedMap:'dusk'}, info:'固定战场 · 白石渡口 · 江心桥头堡（手写）' },
+  tutBridge:{ tpl:'M6', mods:{fixedMap:'dusk'}, info:'固定战场 · 白龙江三门 · 三座关隘堡垒（手写）' },
 };
 // —— 终章 Boss 脉冲人格化（v6）—— 四族 L10 共用 boss 骨架，但脉冲各自不同。
 // 清球 AOE 是 Boss 要塞的共同底盘，四种人格都保留（否则要塞的战术意义会变味）；
@@ -2802,7 +2809,6 @@ human:[
    {at:0.8, who:1, focus:'base', zoom:1.6, label:'你的领地',
     lines:[[1,'陛下，开战前先认清战场——画面上所有插着绿旗的建筑，都是您的领地。'],[0,'最大的那座是您的大本营，其余村镇也听从您的号令。'],[1,'记住这抹绿：是友非敌。下面让军师教您怎么从领地派兵出征。']]},
   ],
-  outro:[[1,'陛下，最后一面绿旗插上了被烧的麦田。'],[0,'把火把收起来。今晚，先让村民睡个好觉。'],[1,'……可狼烟，不止一处。']],
   // C1.5 演出补丁：尾声时哥布林援军从地图边缘杀出——教「回防」（占到大半地图时触发，每局一次）
   midCine:[
     { on:'onAlmostWin', pct:72, seq:[
@@ -2816,25 +2822,26 @@ human:[
   ],
   outro:[[1,'陛下，最后一面绿旗插上了被烧的麦田。'],[0,'把火把收起来。今晚，先让村民睡个好觉。'],[1,'……可狼烟，不止一处。']],
   win:'边境的狼烟熄了，但这场战争才刚刚开始。'},
- {name:'渡口阻击', skel:'tutBridge', foes:['dragon','dragon'], brief:'白龙江横贯战场，江上只有一座白石桥，江心桥头堡中立——先夺下它，才过得去江。',
-  d:[[0,'斥候来报，龙皇派出龙翼左卫、右卫两路，同抢白石渡！'],
-     [1,'白龙江横贯全境，水深浪急——两岸之间，只有一座白石桥可过。'],
-     [1,'桥正中立着先王留下的桥头堡，如今无人驻守：咱们够得着，龙军也够得着。'],
-     [0,'两路龙军同族不同营，谁先抢下桥头堡，谁就握住整条江——抢在他们前面，拿下它！']],
+ // 三门渡口（原「渡口阻击」）：江上三处渡口各立一座先王的关隘堡垒 —— 夺堡者，开门。
+ {name:'三门渡口', skel:'tutBridge', foes:['dragon','dragon'], brief:'白龙江纵贯战场，北津浅滩、白石桥、南岭栈道三处渡口各立一座关隘堡垒——夺下堡垒，门才为你而开。',
+  d:[[0,'斥候来报，龙皇派出龙翼左卫、右卫两路，同抢三处渡口！'],
+     [1,'白龙江纵贯全境，水深浪急——两岸之间只通三处：北津浅滩、白石桥、南岭栈道。'],
+     [1,'每处渡口都立着先王留下的关隘堡垒，如今无人驻守：咱们够得着，龙军也够得着。'],
+     [0,'两路龙军同族不同营——谁先夺下一座堡垒，谁就握住那道门。抢在他们前面，把门打开！']],
  dir:[
   {at:0.8, who:1, focus:'base', zoom:1.7, label:'白龙江 · 天险',
-   lines:[[1,'陛下请看战场：一条白龙江把两岸劈开，兵马趟不过去，只能走白石桥。'],
+   lines:[[1,'陛下请看战场：一条白龙江把两岸劈开，兵马趟不过去，只能走三处渡口。'],
           [0,'江是天险——可天险只挡得住不长脑子的人。']]},
-  {at:1.6, who:1, focus:'bunker', zoom:2.05, label:'江心桥头堡 · 中立',
-   lines:[[1,'桥正中那座带盾牌标记的，就是江心桥头堡——此刻中立，谁先插旗归谁。'],
-          [0,'记着：那里面一个守军，得用两个兵才啃得动。集中兵力，先把它抢下来！']]},
-  {at:2.6, who:1, focus:'bunker', zoom:1.9, label:'关隘 · 不夺堡，不过桥',
-   lines:[[1,'还有一条铁律请陛下记住：桥头堡一日不归我，我军一日不能从桥上穿过去。'],
+  {at:1.6, who:1, focus:'bunker', zoom:2.05, label:'关隘堡垒 · 三座皆中立',
+   lines:[[1,'三处渡口上那三座带盾牌标记的，就是先王的关隘堡垒——此刻全部中立，谁先插旗，谁就握住那道门。'],
+          [0,'记着：那里面一个守军，得用两个兵才啃得动。中间的白石桥最硬，上下两处好啃——挑软的先下手！']]},
+  {at:2.6, who:1, focus:'bunker', zoom:1.9, label:'铁律 · 夺堡者，开门',
+   lines:[[1,'还有一条铁律请陛下记住：堡垒一日不归我，那道门一日不开——我军过不去。'],
           [0,'……那江那边的龙军，也一样过不来？'],
-          [1,'正是。这座堡，是整条江上唯一的门闩。']]},
+          [1,'正是。夺下堡垒，门就为你而开；门一开，也就把敌人放了进来。']]},
  ],
- outro:[[1,'石桥守住了。龙军的兵器堆了半座桥面。'],[0,'先王安这座桥头堡时说过：江是天险，人是门闩。'],[0,'今日之后，白龙江记得谁才是它的主人。']],
- win:'石桥上堆满了龙军的兵器，白龙江安然无恙。'},
+ outro:[[1,'三道门守住了。龙军的兵器堆满了渡口。'],[0,'先王安这些堡垒时说过：江是天险，人是门闩。'],[0,'今日之后，白龙江记得谁才是它的主人。']],
+ win:'三处渡口堆满了龙军的兵器，白龙江安然无恙。'},
  {name:'抢收麦季', skel:'harvest', tpl:'S5', foes:['goblin','dwarf'], brief:'三座大麦仓遍布全岛——抢在敌人前面收下粮仓，就是抢下整个收获季。',
    d:[[1,'又是收获季……他们专挑这时候来抢粮！'],[0,'抢走我们的麦子，就想饿垮我们的军队？'],[0,'全军出城，保卫粮仓！乱局之中，手快者得食。']],
   // C1.5 演出补丁：腐烂启动（60s）——运镜扫过麦浪变焦土 + 警报对白
@@ -3291,14 +3298,22 @@ const LEVEL_MAPS={
   // 葫芦形陆块 —— 北岸宽、南岸窄，最宽处正好是桥行。江与外海连成一片（同为水色系），
   // 海岸线描边负责把「陆地 / 江 / 外海」三者分开。
   // 桥关铁律不变：江列(3)上下由 pad 外扩贯穿，全图只有 w-B-e 一条通路。
-  dusk:{ cols:7, rows:7, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // L2 渡口阻击 · 重做
+  // 三门渡口（原「渡口阻击」）：江纵贯 col3，自上而下三处渡口 —— 北津浅滩(b) / 白石桥(B) / 南岭栈道(b)。
+  // 三座都是 gate（findPath 规则：不是自己的堡垒不许穿行），中立时两岸谁都过不去 → 必须夺堡开门。
+  // 中间白石桥是主门（cap25/pop14 硬），上下两处侧门更软（cap18/pop8），玩家可挑软门先开。
+  // D-8 有机化（2026-09-09）：原版两岸都是等宽直筒、外轮廓方正如格子本。
+  // 改法：保留 col3 的江与 row1/3/5 三处渡口不变，只让**陆地轮廓凹凸交错**——
+  //   左岸在 row2 向西凸出（col0 有地），右岸在 row1/row4 向东凸出（col6 有地），
+  //   两处凸出错开、彼此不对称；江尾 row6 做成三格宽的喇叭口入海。
+  // 铁律不变：col3 除三处渡口外全是水，全图仍只有这三处能过江。
+  dusk:{ cols:7, rows:7, pad:1, river:3, bridge:true, bunkerCap:25, bunkerPop:14, // L2 三门渡口
     grid:['...~...',
-          '..v~2v.',
-          '.Pv~vv.',
-          '.vwBe3.',
-          '.vv~T..',
-          '.N.^...',
-          '...~...'] },
+          '.vwbevv',
+          'vvv~vv.',
+          '.PwBe2.',
+          '.vv~vvv',
+          '.Nwbe3.',
+          '..~~~..'] },
   burn:{ cols:7, rows:3, pad:1, river:3, bridge:true, bunkerCap:28, bunkerPop:16, // 天龙 L2 焚断桥
     grid:['vvT~v2v',
           'vPwBevv',
@@ -3317,12 +3332,14 @@ const LEVEL_MAPS={
   // 批次F：改用 '.' 手画海岸线 —— 原先 6×4 满格矩形靠自动椭圆雕刻，只啃得掉四角（22% 上限），
   // 主体仍是方块。现在挖成北宽南窄的半岛：玩家在南岸登陆，两家哥布林盘踞北岸，
   // 中央麦田(N)是双方争夺的粮仓，岬角上的箭塔(T)卡住东侧陆桥。
+  // H-1：'c' = 焦土村（被哥布林烧坏的村子）—— 容量小、产兵减半；
+  // 玩家夺回后 20 秒「火灭地复」，容量与产能恢复正常，地块从焦黑褪回金黄。
   h1:{ cols:7, rows:7,   // L1 烽火边境 · 重做
     grid:['.......',
           '.^^.2..',
-          '..vvv..',
-          '.vNTv..',
-          '.vvvv..',
+          '..vcv..',
+          '.vNTc..',
+          '.vvcv..',
           '.P..v3.',
           '.......'] },
   g1:{ cols:6, rows:4,   // 天龙 L1 蝼蚁的村庄：水塘横在村中，两角山体收边
@@ -3580,12 +3597,15 @@ function buildFixedMap(cx,cy,mapId,md){
     if(ch==='P'){ owner=1; cap=Math.round(30*pb.capMul); pop=Math.round(cap*0.6*pb.startMul*(1+0.10*treeLv('human','b'))); }
     else if(ch==='2'||ch==='3'){ owner=(ch==='2')?2:3; cap=30; pop=18; }
     else if(ch==='B'){ type='bunker'; cap=M.bunkerCap||25; pop=M.bunkerPop||14; }
+    // 'b' = 小关隘堡垒（三门渡口的两处侧门）：同样是 gate，但更软，给玩家「先啃软门」的选择
+    else if(ch==='b'){ type='bunker'; cap=18; pop=8; }
     else if(ch==='T'||ch==='G'){ type='tower'; cap=CFG.towerCap; pop=Math.round(CFG.towerCap*0.5); }
     else if(ch==='X'){ type='tower'; cap=60; pop=50; }
     else if(ch==='K'){ owner=2; type='tower'; cap=60; pop=50; }
     else if(ch==='S'){ type='tower'; cap=40; pop=30; }
     else if(ch==='F'){ type='forge'; cap=35; pop=Math.round(35*0.5); }
     else if(ch==='N'){ type='barn'; cap=45; pop=Math.round(45*0.5); }
+    else if(ch==='c'){ type='village'; cap=12; pop=4; }   // H-1 焦土村：烧坏的村子，容量小、产兵慢
     else if(ch==='H'){ type='stall'; cap=20; pop=10; }
     else if(ch==='Z'){ cap=20; pop=6; }
     else if(ch==='M'){ const mc=(md&&md.megaCap)||80; cap=mc; pop=Math.round(mc*0.5); }
@@ -3598,16 +3618,17 @@ function buildFixedMap(cx,cy,mapId,md){
       owner, cap, pop:Math.min(pop,cap), acc:0, flash:0, conquer:0, poly:cc.cell,
       type, pending:0, atkCd:0, towerFx:null, defAcc:0 };
     // 标记位：下游逻辑只认这些标记，必须与随机路径同名同义
-    if(ch==='B'){ n.bunker=true; n.gate=true; }              // gate：关隘，见 findPath 的穿行规则
+    if(ch==='B'||ch==='b'){ n.bunker=true; n.gate=true; }    // gate：关隘，见 findPath 的穿行规则（b=小门，同规则）
     if(ch==='G') n.goldTower=true;                            // 刮金箔（哥布林 L4）
     if(ch==='X'){ n.boss=true; n.pulseCd=8; n.rad*=1.25; n.pulse=BOSS_PULSE[campRace]||BOSS_PULSE.dragon; }
     if(ch==='K'){ n.kingsTent=true; n.rad*=1.28; }            // 斩首战王帐（归敌方 2）
     if(ch==='S'){ n.sanctum=true; n.pulseCd=8; n.rad*=1.2; }  // 天龙·龙神祭坛
     if(ch==='F') n.forge=true;                                // 矮人·符文熔炉
     if(ch==='N') n.growMul=1.5;                               // 人类·大麦仓（高产）
+    if(ch==='c'){ n.charred=true; n.growMul=CFG.charGrowMul; } // H-1 焦土：产能减半，夺回后 20s 复原
     if(ch==='H') n.stallGold=8;                               // 哥布林·货栈（首占 +8 金）
     if(ch==='Z'){ n.prize=true; n.prizeGold=(md&&md.prizeGold)||25; }
-    if(M.bridge && (ch==='w'||ch==='e'||ch==='B')) n.onBridge=true;  // 桥面三格：过路费 / 焚桥都认它
+    if(M.bridge && (ch==='w'||ch==='e'||ch==='B'||ch==='b')) n.onBridge=true;  // 桥面三格：过路费 / 焚桥都认它（b=小门，同属桥面）
     n._g={ c:s.c, r:s.r };
     nodes.push(n);
   }
@@ -4380,7 +4401,27 @@ function arriveBall(node, owner, b){
     node.defAcc -= k; node.pop -= k; node.flash = 0.3; Sfx.play("hit");
   }
   if(node.pop <= 0){
+    // 关隘锁定（H-2）：刚易主的门在 gateLock 秒内不再易主 —— 否则双方拿门当乒乓球来回拉锯，
+    // 「夺堡开门」的节奏感全无。兵力照常消耗，只是打光后先吊住 1 兵、旗不换色。
+    if(node.gate && node.gateLockUntil && node.gateLockUntil > gameTime){
+      node.pop = 1; node.defAcc = 0; node.flash = 0.3;
+      if(!node._lockHintAt || gameTime - node._lockHintAt > 3){
+        node._lockHintAt = gameTime;
+        floatText(node.x, node.y - node.rad - 6, '铁闸未稳…', '#9aa6b2');
+      }
+      return;
+    }
     node.owner = owner; node.pop = 1; node.defAcc = 0;
+    if(node.gate){
+      node.gateLockUntil = gameTime + (CFG.gateLock||8);   // 新主获得一段安稳的开门窗口
+      // 门开 / 门关都要有声音：右上角敌方指挥官开口（夺门嚣张、丢门懊恼）
+      if(owner===1) foeSayAny('gateLose'); else foeSay('gateWin', owner);
+    }
+    // H-1 焦土：玩家夺回烧坏的村子 → 开始「火灭地复」倒计时（中途丢了会中断）
+    if(node.charred && owner===1 && !node.charRestoreAt){
+      node.charRestoreAt = gameTime + (CFG.charRestore||20);
+      floatText(node.x, node.y - node.rad - 14, '火灭地复…', '#ffb35c');
+    }
     node.pending = 0;                        // 易主清掉旧主未出发的承诺
     node.shieldUntil = node.runeUntil = node.fearUntil = 0;  // 易主同时清掉旧状态效果
     node.conquer = 0.85;                     // 占领瞬间的爆点光环
@@ -4700,6 +4741,7 @@ function showToast(icon,name,desc,secs){
 const AIDE_LINES={
   human:{ // 格瑞姆 · 老元帅：忠直老练，称"陛下"，自称"末将/老臣"
     open:['末将领命！这一战的每一寸土地，都会插上王旗。','陛下，全军就位——只等您一声令下。'],
+    charRestore:['火灭了，地还在——这村子，活过来了。','陛下，焦土回青：这一寸地，又归王土了。'],
     defend:['陛下！有据点正被敌军围攻，快派兵回防！','陛下，前线告急——丢了它，防线就要开缺口了！','敌军压上来了！陛下，末将请求回援！'],
     wipe:['捷报！{foe}的全军已被我军尽数歼灭！','陛下，{foe}的旗帜倒下了。老臣代将士们谢恩。'],
     nearWin:['胜局已定！敌军只剩残兵，请陛下收官。','大局已定——全军都在等您收网的将令！'],
@@ -4733,22 +4775,30 @@ const FOE_LINES={
     taunt:['为了王国！你们越境的那一刻，就已经输了。','放下武器——国王陛下会给你体面。'],
     press:['看到差距了吗？这就是王师的纪律。','王旗在推进。识时务的话，现在投降还来得及。'],
     falter:['稳住……不能在这里倒下！','请求增援！重复——请求增援！'],
-    down:['人类的疆土……一寸……也没带走吗……'] },
+    down:['人类的疆土……一寸……也没带走吗……'],
+    gateWin:['门归王师了——过江者，留下姓名。','铁闸在我们手里。把桥面清空，放他们过来。'],
+    gateLose:['门丢了！……重整队形，再夺回来！','铁闸易主——不许乱，二线顶上！'] },
   dragon:{ // 锡拉德 · 龙翼军官：高傲军官腔
     taunt:['蝼蚁们，仰望天空吧——那是你们此生最后的风景。','龙焰所过之处，不需要谈判。'],
     press:['挣扎吧。绝望，也是高贵的娱乐。','看见了吗？这就是血脉的差距。'],
     falter:['区区凡人……竟伤到龙翼……','重整队形！高贵者不容有失！'],
-    down:['龙之血……不会白白流淌的……记住这一天……'] },
+    down:['龙之血……不会白白流淌的……记住这一天……'],
+    gateWin:['这道门，从今日起叫龙之门。','凡人也配开门？……也罢，让朕看看你们能撑多久。'],
+    gateLose:['门……被蝼蚁夺走了？可笑。','收拢龙翼——这道门，朕要亲自拿回来。'] },
   goblin:{ // 裂爪 · 劫掠头目：匪气+生意经
     taunt:['你们家粮仓的位置，我们都提前踩好点啦！','兄弟们开饭啦——先抢为敬！'],
     press:['哈哈！你们的城头快插满我们的旗啦！','投降吧！大王保证——只抢三成！'],
     falter:['亏了亏了！这票要亏本了！','妈呀……这批家伙怎么这么能打！'],
-    down:['大王……小弟先行一步……欠的账就一笔勾销吧……'] },
+    down:['大王……小弟先行一步……欠的账就一笔勾销吧……'],
+    gateWin:['这门以后归咱收费啦——一颗人头两个铜板！','嘿嘿，铁闸一落，这条江就是咱的收费站！'],
+    gateLose:['诶？！门怎么关上了——谁把钥匙顺走了？','亏了亏了！这门本来能收三天的钱！'] },
   dwarf:{ // 巴恩 · 铁砧王子：少年气盛的王子腔
     taunt:['矮人的锤子几百年没开荤了——今天就拿你们的头盔试音！','嘴上笑矮子？好啊，那就用脑袋来验证。'],
     press:['跑啊！让整个大陆看看，谁才是笑话！','锤子已经举起来了——它落下的地方就是坟！'],
     falter:['胡子保不住了……先撤一步！','这些家伙是铁打的吗？！'],
-    down:['先祖在上……孩儿……尽力了……'] },
+    down:['先祖在上……孩儿……尽力了……'],
+    gateWin:['锤子砸开的门，才配叫门。','铁闸在手——让他们尝尝被关在外面的滋味。'],
+    gateLose:['门丢了？那就再凿一个出来！','哼，铁闸也拦不住矮人的锤子——弟兄们，上！'] },
 };
 const AC_SHOW_MS=3400, AC_GAP_MS=420;   // 每条停留 / 收起后到下条的间隔
 let acQueue=[], acBusy=false, acHideT=null, acLastLine='';
@@ -4806,12 +4856,16 @@ function aideReset(){
   if(el){ el.classList.remove('on'); el.style.top=''; }
 }
 // —— 敌方阵营喊话：以该势力的在场指挥官头像+族色播报（盟友期/已覆灭不开口） ——
+let foeSayAt = -99;      // 敌方喊话全局冷却（两条之间至少 CFG.foeBarkGap 秒）
 function foeSay(kind, o){
   if(lastMode!=='camp' || !factionOf[o]) return;
   if(!aideAlive[o]) return;
   if(!hostileOf(1,o)) return;
   const r=factionOf[o], arr=(FOE_LINES[r]||{})[kind];
   if(!arr || !arr.length) return;
+  // 统一限流：覆灭遗言（down）一生只有一次，不受冷却限制
+  if(kind!=='down' && gameTime - foeSayAt < (CFG.foeBarkGap||5)) return;
+  foeSayAt = gameTime;
   let cmd=null;
   const lvDef=pendingCampLevel?campLv(campRace,pendingCampLevel):null;
   for(const c of lvCommanders(lvDef,pendingCampLevel||1)){ if(c.race===r){ cmd=c; break; } }
@@ -4962,6 +5016,26 @@ function barnRotTick(){
     if(!rotten) rotten=n;
   }
   if(rotten) floatText(rotten.x, rotten.y-rotten.rad-14, '麦仓腐烂 · 容量 −10%', '#b09a5e');
+}
+// —— H-1 焦土复原（人类 L1 烽火边境）：被烧的村子产能减半、容量受限；
+//     玩家夺回后 20 秒「火灭地复」——焦黑 → 冒烟 → 金黄麦田，容量与产能回到正常村庄。
+//     教学价值：新手第一眼就看到「占领 = 把地救回来」，比单纯加数字更有说服力。
+let charRestoredOnce=false;
+function charRestoreTick(){
+  for(const n of nodes){
+    if(!n.charred || !n.charRestoreAt) continue;
+    if(n.owner!==1){ n.charRestoreAt=0; continue; }        // 又丢了：复原中断，重新来过
+    if(gameTime < n.charRestoreAt) continue;
+    n.charred=false; n.charRestoreAt=0;
+    n.growMul=1;                                            // 产能减半 → 正常
+    n.cap=Math.max(n.cap, CFG.charCapBack||20);
+    n.pop=Math.min(n.cap, n.pop+2);
+    n.conquer=0.85; n.flash=0.5;
+    fx.push({kind:'ring', x:n.x, y:n.y, life:.9, max:.9, r0:n.rad*.3, r1:n.rad*1.9, color:'#ffd23e', vx:0, vy:0});
+    floatText(n.x, n.y-n.rad-14, '焦土复苏 · 产能恢复', '#ffd23e');
+    Sfx.play('ui');
+    if(!charRestoredOnce){ charRestoredOnce=true; aideSay('charRestore'); }
+  }
 }
 // 过路费（哥布林 L2 · toll）：己方兵球经过己方持有的桥面格 → +1G 入战利品箱。
 // 每颗球全程只交一次（paidToll）——否则一个整编队过桥直接把 30G 目标冲爆，关卡就没了。
@@ -5117,6 +5191,7 @@ function update(dt){
   //      都按 gameTime 计时（暂停自然停摆），入账走战利品箱 gGold[1]（自动计入掠夺目标）
   goldLeafTick();
   barnRotTick();
+  charRestoreTick();     // H-1 焦土复原（人类 L1）：占领焦土村 20s 后火灭地复，产能与容量回归
   // 4.7) Boss 要塞 / 龙神祭坛脉冲：每 8s 一圈 AOE 清除半径内所有球（无差别——占领方也需走位规避）
   for(const n of nodes){
     if(!n.boss && !n.sanctum) continue;
@@ -5847,6 +5922,26 @@ function draw(){
       const a=i*2.399+n.rad;
       const px=n.x+Math.cos(a)*n.rad*0.45, py=n.y+Math.sin(a)*n.rad*0.45;
       ctx.globalAlpha=(0.35+0.65*Math.abs(Math.sin(gameTime*1.7+i*1.3)))*0.85;
+      ctx.beginPath(); ctx.arc(px,py,1.6,0,Math.PI*2);
+      ctx.fillStyle="#ff8a3c"; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 3.21) H-1 焦土村：被烧坏的村子铺焦黑 + 余烬明灭；复原后自动回到正常地色
+  for(const n of nodes){
+    if(!n.charred) continue;
+    const prog = n.charRestoreAt ? 1 - Math.max(0, (n.charRestoreAt-gameTime)/(CFG.charRestore||20)) : 0;
+    ctx.save();
+    ctx.beginPath(); drawPath(n.poly, 1);
+    // 越接近复原越淡：玩家能看着焦土一点点褪掉
+    ctx.fillStyle="rgba(20,11,7,"+(0.62*(1-prog*0.75)).toFixed(3)+")"; ctx.fill();
+    ctx.lineWidth=1.6; ctx.strokeStyle="rgba(255,122,42,"+(0.45*(1-prog)).toFixed(3)+")"; ctx.stroke();
+    ctx.clip();
+    for(let i=0;i<5;i++){
+      const a=i*2.399+n.rad;
+      const px=n.x+Math.cos(a)*n.rad*0.45, py=n.y+Math.sin(a)*n.rad*0.45;
+      ctx.globalAlpha=(0.35+0.65*Math.abs(Math.sin(gameTime*1.7+i*1.3)))*0.85*(1-prog);
       ctx.beginPath(); ctx.arc(px,py,1.6,0,Math.PI*2);
       ctx.fillStyle="#ff8a3c"; ctx.fill();
     }
@@ -8914,11 +9009,11 @@ const GUIDES = {
     {txt:'脚下这片插绿旗的是您的领地——最大的那座是大本营。按住它，拖向敌旗村子，松手即派兵', focus:'base', label:'按住拖动出兵', wait:'send'},
     {txt:'漂亮！兵线已上路——把全岛插成绿旗，您就赢了'},
   ],
-  // L2 渡口阻击（固定桥图）：半军 + 召回——剧情锚点：白石渡口、唯一石桥、敌联军先锋
+  // L2 三门渡口（固定渡口图）：半军 + 召回——剧情锚点：白龙江三处渡口、三座关隘堡垒、敌联军先锋
   l2:[
-    {txt:'格瑞姆元帅探过：白石渡口只有一座石桥，敌联军先锋正扑过来。先练「半军」——点亮左下角 ½ 钮再拖，或按住基地约半秒再拖：只派一半兵压上桥头，另一半留守大本营', focus:'base', label:'半军守桥', wait:'send', chk:d=>!!(d&&d.half)},
+    {txt:'格瑞姆元帅探过：白龙江三处渡口各立一座关隘堡垒，敌联军先锋正扑过来。先练「半军」——点亮左下角 ½ 钮再拖，或按住基地约半秒再拖：只派一半兵去夺堡，另一半留守大本营', focus:'base', label:'半军夺堡', wait:'send', chk:d=>!!(d&&d.half)},
     {txt:'先锋若被龙军截在桥头，别慌——立刻点一下出发的村子，部队马上掉头回防。谁也别落在敌阵里', focus:'base', label:'点村召回', wait:'recall'},
-    {txt:'桥头稳住了。这一仗，白石渡口就交给你守——谁也别想过来'},
+    {txt:'门守住了。这一仗，三处渡口就交给你了——谁也别想过来'},
   ],
   // L3 抢收麦季：技能瞄准——剧情锚点：三座大麦仓、抢收乱局
   l3:[
@@ -9156,12 +9251,18 @@ function world2scr(p){ return { x:(p.x-cam.x)*cam.zoom+W/2, y:(p.y-cam.y)*cam.zo
 // 平移边界：视野最多拖到「地图包围盒外扩 70px 世界单位」为止，防止把地图拖丢
 function clampCam(){
   if(!MAPBB) return;
-  const m=70, vw=W/cam.zoom, vh=H/cam.zoom;
+  const m=70, vw=W/cam.zoom;
+  // 垂直方向必须按「可视区」算：顶部 G_TOP 被 HUD 占住，可视中心比屏幕中心下移 (G_TOP/2)/zoom。
+  // 早期版本这里用 vh=H/zoom 且直接钳 cam.y，与 camHome 的 G_TOP 补偿口径不一致 ——
+  // 表现为：双指缩放时画面轻微跳一下，且「锚点下世界点保持」断言失败（历史红灯）。
+  const vh=(H-G_TOP)/cam.zoom, off=(G_TOP/2)/cam.zoom;
   const bw=(MAPBB.x1-MAPBB.x0)+2*m, bh=(MAPBB.y1-MAPBB.y0)+2*m;
   if(vw>=bw) cam.x=(MAPBB.x0+MAPBB.x1)/2;
   else cam.x=Math.max(MAPBB.x0-m+vw/2, Math.min(MAPBB.x1+m-vw/2, cam.x));
-  if(vh>=bh) cam.y=(MAPBB.y0+MAPBB.y1)/2;
-  else cam.y=Math.max(MAPBB.y0-m+vh/2, Math.min(MAPBB.y1+m-vh/2, cam.y));
+  let cy=cam.y+off;                                   // 可视区中心的世界 y
+  if(vh>=bh) cy=(MAPBB.y0+MAPBB.y1)/2;
+  else cy=Math.max(MAPBB.y0-m+vh/2, Math.min(MAPBB.y1+m-vh/2, cy));
+  cam.y=cy-off;
 }
 function camPanBy(dx,dy){           // dx/dy 屏幕像素（手指位移 → 反向移动世界）
   cam.x-=dx/cam.zoom; cam.y-=dy/cam.zoom;

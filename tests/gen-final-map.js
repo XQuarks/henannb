@@ -4,6 +4,10 @@
 // 用法：node tests/gen-final-map.js
 const fs=require('fs');
 const vm=require('vm');
+const path=require('path');
+// 产物统一落在 tests/_out/（生成物，不入库），不再往仓库根目录丢预览 HTML
+const OUT_DIR=path.join(__dirname,'_out');
+if(!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR);
 
 const GEN = fs.readFileSync('tests/gen-map-organic.js','utf8');
 function slice(a, b, tag){
@@ -32,7 +36,7 @@ if(sb.__err){ console.log('实机跑挂了：\n'+sb.__err); process.exit(1); }
 const S = sb.__snaps;
 
 // 落盘给 tests/check-geom.js 做几何自检（结构需与历史 _snaps.json 一致：变体 → 关卡）
-fs.writeFileSync('tests/_snaps_final.json', JSON.stringify({ NOW: S }));
+fs.writeFileSync(path.join(OUT_DIR,'_snaps.json'), JSON.stringify({ NOW: S }));
 
 const L1=S.h1, L2=S.dusk;
 console.log('L1 '+L1.nodes.length+'格 面积倍差='+L1.ratio.toFixed(1)+'x 平均边数='+L1.edgesAvg.toFixed(1)
@@ -90,5 +94,6 @@ out+='<div class="note"><b>自检结论：'+(okAll?'<span class="ok">全部通�
   +'· 几何自检（零面积 / 自交 / 相邻开缝）见 <code>node tests/check-geom.js</code></div>';
 out+='</body></html>';
 
-fs.writeFileSync('map-final-preview.html', out);
-console.log('已生成 map-final-preview.html');
+const outP=path.join(OUT_DIR,'map-preview.html');
+fs.writeFileSync(outP, out);
+console.log('已生成 '+path.relative(process.cwd(), outP)+'（快照同步写入同目录，供 check-geom 使用）');

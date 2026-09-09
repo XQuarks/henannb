@@ -300,10 +300,21 @@ function connectedAll(){
     const c0=scr2world({x:W/2,y:H/2});
     T('屏幕中心映射相机中心', Math.abs(c0.x-cam.x)<0.5 && Math.abs(c0.y-cam.y)<0.5);
     const ax=W/2+137, ay=H/2-88;
+    // 「锚点不动」只在「地图明显大于视野、且未触及平移边界」时成立：
+    // L1 仅 15 格（全景 zoom 0.77，地图+边距 863px < 屏幕 1280px），可平移范围只有 ~35px，
+    // 任何偏离中心的锚点放大后都会撞上 clampCam 的边界钳制——那是预期行为，不是 bug。
+    // 所以改用随机自由对战图（27 格，地图远大于视野）来验证锚点语义本身。
+    buildMap('M0',{seed:7});
     const w0=scr2world({x:ax,y:ay});
-    camZoomAt(ax,ay,1.5);
+    camZoomAt(ax,ay,2.5);                       // 放大到视野明显小于地图
     const w1=scr2world({x:ax,y:ay});
-    T('缩放锚点不动（锚点下世界点保持）', Math.abs(w0.x-w1.x)<0.6 && Math.abs(w0.y-w1.y)<0.6);
+    T('缩放锚点不动（地图>视野时，锚点下世界点保持）',
+      (W/cam.zoom)<((MAPBB.x1-MAPBB.x0)+140) && Math.abs(w0.x-w1.x)<0.6 && Math.abs(w0.y-w1.y)<0.6);
+    // 回到小图：视野大于地图时应居中显示，而不是贴着某一边
+    stageLv('human',1);
+    camZoomAt(ax,ay,1.5);
+    T('视野>地图时居中显示（小图放大不贴边）',
+      (W/cam.zoom)>=((MAPBB.x1-MAPBB.x0)+140) && Math.abs(cam.x-(MAPBB.x0+MAPBB.x1)/2)<0.6);
     T('缩放后标记为玩家视角', camUser===true);
     camZoomAt(ax,ay,99);
     T('缩放不超过上限 CFG.camMaxZoom', cam.zoom<=CFG.camMaxZoom+1e-9);
@@ -395,6 +406,30 @@ function connectedAll(){
     buildMap('S1', SKEL.granaryHold.mods);
     T('guideFocus 认得 fcastle（L6 引导可聚焦）', guideFocus('fcastle').length===1);
     T('dirResolveFocus 认得 fcastle（开场分镜可聚焦）', dirResolveFocus('fcastle').length===2);
+  }
+
+  // ========== J. H-1 焦土复原（人类 L1 烽火边境）==========
+  console.log('J. 焦土复原：夺回烧坏的村子，20s 后火灭地复');
+  {
+    stageLv('human',1);
+    launchBattle(); aiFrozen=false; guide=null;
+    const cs=nodes.filter(n=>n.charred);
+    T('L1 有焦土村（被烧坏的村子）', cs.length>=1);
+    T('焦土期产能减半且容量受限', cs.every(c=>c.growMul<1 && c.cap<=12));
+    const c=cs[0];
+    charRestoreTick();
+    T('中立状态不会自己复原', c.charred===true);
+    let k=0; while(c.owner!==1 && k++<100) arriveBall(c,1,{siege:99});
+    T('玩家夺回后开始 20s 倒计时', !!c.charRestoreAt && Math.abs(c.charRestoreAt-gameTime-CFG.charRestore)<0.2);
+    charRestoreTick();
+    T('计时未到不复原（不能白送）', c.charred===true);
+    gameTime=c.charRestoreAt+0.1; charRestoreTick();
+    T('到时复原：产能与容量回归正常', c.charred===false && c.growMul===1 && c.cap>=CFG.charCapBack);
+    if(cs[1]){
+      const c2=cs[1]; let k2=0; while(c2.owner!==1 && k2++<100) arriveBall(c2,1,{siege:99});
+      c2.owner=2; charRestoreTick();
+      T('中途丢掉则复原中断', c2.charRestoreAt===0 && c2.charred===true);
+    }
   }
 
   console.log('');
